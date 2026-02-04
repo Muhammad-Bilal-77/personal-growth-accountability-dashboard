@@ -1422,29 +1422,45 @@ const scheduleNotifications = () => {
 
         const nextPrayer = prayerNames[prayerNames.indexOf(prayerName) + 1];
         const nextTimeStr = nextPrayer ? timings[nextPrayer] : null;
-        if (nextTimeStr) {
-          const endTime = parseTime(todayStr, nextTimeStr, timezone || "UTC");
+        const endTime = nextTimeStr
+          ? parseTime(todayStr, nextTimeStr, timezone || "UTC")
+          : new Date(startTime.getTime() + 90 * 60000);
+
+        const prayerDate = getPrayerDate();
+        const { data: log } = await supabase
+          .from("prayer_logs")
+          .select("completed")
+          .eq("prayer_id", prayerName.toLowerCase())
+          .eq("log_date", prayerDate)
+          .maybeSingle();
+
+        if (!log?.completed) {
           const halfTime = new Date(startTime.getTime() + (endTime.getTime() - startTime.getTime()) / 2);
           const halfDiff = Math.abs((now.getTime() - halfTime.getTime()) / 60000);
           if (halfDiff <= 2) {
-            const prayerDate = getPrayerDate();
-            const { data: log } = await supabase
-              .from("prayer_logs")
-              .select("completed")
-              .eq("prayer_id", prayerName.toLowerCase())
-              .eq("log_date", prayerDate)
-              .maybeSingle();
+            const shouldSend = await shouldSendNotification("prayer_half", todayStr, prayerName);
+            if (shouldSend) {
+              const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
+              await sendMail({
+                subject: `${prayerName} reminder`,
+                text: `${prayerName} time is halfway through. Please pray soon.\n\nHadith: ${hadith}`,
+              });
+              await markNotificationSent("prayer_half", todayStr, prayerName);
+            }
+          }
 
-            if (!log?.completed) {
-              const shouldSend = await shouldSendNotification("prayer_half", todayStr, prayerName);
-              if (shouldSend) {
-                const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
-                await sendMail({
-                  subject: `${prayerName} reminder`,
-                  text: `${prayerName} time is halfway through. Please pray soon.\n\nHadith: ${hadith}`,
-                });
-                await markNotificationSent("prayer_half", todayStr, prayerName);
-              }
+          const endWarnTime = new Date(endTime.getTime() - 10 * 60000);
+          const endDiff = Math.abs((now.getTime() - endWarnTime.getTime()) / 60000);
+          if (endDiff <= 2) {
+            const minutesLeft = Math.max(0, Math.round((endTime.getTime() - now.getTime()) / 60000));
+            const shouldSend = await shouldSendNotification("prayer_end", todayStr, prayerName);
+            if (shouldSend) {
+              const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
+              await sendMail({
+                subject: `${prayerName} time ending soon`,
+                text: `${prayerName} time is ending in about ${minutesLeft} minutes. Please pray before it ends.\n\nHadith: ${hadith}`,
+              });
+              await markNotificationSent("prayer_end", todayStr, prayerName);
             }
           }
         }
