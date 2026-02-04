@@ -1482,6 +1482,16 @@ const scheduleNotifications = () => {
     }
   });
 
+  // Keep Supabase active (every 3 days at 03:00)
+  cron.schedule("0 3 */3 * *", async () => {
+    try {
+      if (!supabase) return;
+      await supabase.from("tasks").select("id").limit(1);
+    } catch (error) {
+      console.warn("Supabase keep-alive failed", error.message);
+    }
+  });
+
   cron.schedule("*/1 * * * *", async () => {
     try {
       const now = new Date().toISOString();
