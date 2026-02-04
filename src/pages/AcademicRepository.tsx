@@ -6,6 +6,7 @@ import SubjectTree from '@/components/academic/SubjectTree';
 import LessonList from '@/components/academic/LessonList';
 import LessonViewer from '@/components/academic/LessonViewer';
 import { api, API_URL } from '@/lib/api';
+import { getToken } from '@/lib/auth';
 import { toast } from '@/components/ui/sonner';
 import ApiStatusBanner from '@/components/common/ApiStatusBanner';
 
@@ -298,6 +299,9 @@ export default function AcademicRepository() {
       };
 
       xhr.open('POST', `${API_URL}/api/lessons/${currentLesson.id}/upload`);
+      if (getToken()) {
+        xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
+      }
       xhr.send(formData);
     } catch (error) {
       console.error(error);

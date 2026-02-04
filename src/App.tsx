@@ -11,10 +11,48 @@ import ProgressAnalytics from "./pages/ProgressAnalytics";
 import EventCalendar from "./pages/EventCalendar";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import { clearToken, isLoggedIn } from "@/lib/auth";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  const [authed, setAuthed] = useState(isLoggedIn());
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const verify = async () => {
+      if (!isLoggedIn()) {
+        setChecking(false);
+        setAuthed(false);
+        return;
+      }
+
+      try {
+        await api.get("/api/auth/me");
+        setAuthed(true);
+      } catch (error) {
+        clearToken();
+        setAuthed(false);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    verify();
+  }, []);
+
+  if (checking) {
+    return null;
+  }
+
+  if (!authed) {
+    return <Login onSuccess={() => setAuthed(true)} />;
+  }
+
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -33,6 +71,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;

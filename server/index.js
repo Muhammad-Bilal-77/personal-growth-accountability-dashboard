@@ -7,6 +7,8 @@ import multer from "multer";
 import { Readable } from "stream";
 import cron from "node-cron";
 import nodemailer from "nodemailer";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 
 dotenv.config();
 
@@ -30,6 +32,7 @@ const {
   EMAIL_USE_TLS,
   EMAIL_HOST_USER,
   EMAIL_HOST_PASSWORD,
+  AUTH_JWT_SECRET,
 } = process.env;
 
 if (!SUPABASE_URL) {
@@ -126,6 +129,25 @@ const sendMail = async ({ subject, text }) => {
     subject,
     text,
   });
+};
+
+const verifyPassword = async (input, stored) => {
+  if (!stored) return false;
+  return bcrypt.compare(input, stored);
+};
+
+const requireAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.replace("Bearer ", "").trim();
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const payload = jwt.verify(token, AUTH_JWT_SECRET || "");
+    req.user = payload;
+    return next();
+  } catch (error) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 };
 
 const hadiths = [
@@ -330,6 +352,34 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.post("/api/auth/login", async (req, res) => {
+  const { username, password } = req.body ?? {};
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
+
+  if (!ensureSupabase(res)) return;
+  const { data: user, error } = await supabase
+    .from("auth_users")
+    .select("username,password_hash")
+    .eq("username", username)
+    .maybeSingle();
+
+  if (error || !user) return res.status(401).json({ error: "Invalid credentials" });
+
+  const valid = await verifyPassword(password, user.password_hash);
+  if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+
+  if (!AUTH_JWT_SECRET) return res.status(500).json({ error: "Auth not configured" });
+
+  const token = jwt.sign({ username }, AUTH_JWT_SECRET, { expiresIn: "24h" });
+  return res.json({ token, username });
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  return res.json({ user: req.user });
+});
+
 app.get("/api/drive/status", async (_req, res) => {
   if (!ensureSupabase(res)) return;
   const tokens = await getDriveTokens();
@@ -365,6 +415,16 @@ app.get("/auth/google/callback", async (req, res) => {
   const { tokens } = await oauthClient.getToken(code);
   await saveDriveTokens(tokens);
   return res.send("Google Drive connected. You can close this window.");
+});
+
+app.use("/api", (req, res, next) => {
+  const publicPaths = [
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/me",
+  ];
+  if (publicPaths.includes(req.path)) return next();
+  return requireAuth(req, res, next);
 });
 
 app.get("/api/settings/location", async (_req, res) => {

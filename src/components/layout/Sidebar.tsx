@@ -9,8 +9,10 @@ import {
   Calendar,
   Menu,
   X,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { logout } from '@/lib/auth';
 
 const navItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -110,6 +112,19 @@ export default function Sidebar() {
           })}
         </nav>
 
+
+        <div className="p-4 border-t border-sidebar-border">
+          <button
+            onClick={() => {
+              logout();
+              window.location.reload();
+            }}
+            className="nav-link ripple group w-full"
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
+            {!isCollapsed && <span>Logout</span>}
+          </button>
+        </div>
       </aside>
     </>
   );
