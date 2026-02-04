@@ -1,0 +1,249 @@
+@import url('@fontsource/merriweather/300.css');
+@import url('@fontsource/merriweather/400.css');
+@import url('@fontsource/merriweather/700.css');
+@import url('@fontsource/merriweather/900.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 122 43% 39%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 122 43% 39%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 122 43% 39%;
+
+    --primary: 122 43% 39%;
+    --primary-foreground: 122 45% 90%;
+
+    --secondary: 0 0% 100%;
+    --secondary-foreground: 122 43% 39%;
+
+    --muted: 0 0% 100%;
+    --muted-foreground: 122 43% 39%;
+
+    --accent: 0 0% 100%;
+    --accent-foreground: 122 43% 39%;
+
+    --destructive: 122 43% 39%;
+    --destructive-foreground: 122 45% 90%;
+
+    --border: 122 30% 80%;
+    --input: 122 30% 80%;
+    --ring: 122 43% 39%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 122 43% 39%;
+    --sidebar-primary: 122 43% 39%;
+    --sidebar-primary-foreground: 122 45% 90%;
+    --sidebar-accent: 0 0% 100%;
+    --sidebar-accent-foreground: 122 43% 39%;
+    --sidebar-border: 122 30% 80%;
+    --sidebar-ring: 122 43% 39%;
+
+    /* Custom tokens for this design */
+    --surface-elevated: 0 0% 100%;
+    --surface-sunken: 0 0% 100%;
+    --text-primary: 122 43% 39%;
+    --text-secondary: 122 43% 39%;
+    --text-muted: 122 43% 39%;
+    --divider: 122 30% 80%;
+    --hover-dark: 122 43% 39%;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(122 46% 34% / 0.1);
+    --shadow-md: 0 4px 6px -1px hsl(122 46% 34% / 0.12), 0 2px 4px -2px hsl(122 46% 34% / 0.08);
+    --shadow-lg: 0 10px 15px -3px hsl(122 46% 34% / 0.14), 0 4px 6px -4px hsl(122 46% 34% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(122 46% 34% / 0.16), 0 8px 10px -6px hsl(122 46% 34% / 0.12);
+    --shadow-hover: 0 20px 40px -10px hsl(122 46% 34% / 0.2);
+  }
+
+  .dark {
+    --background: 122 25% 8%;
+    --foreground: 122 45% 70%;
+
+    --card: 122 20% 10%;
+    --card-foreground: 122 45% 70%;
+
+    --popover: 122 20% 10%;
+    --popover-foreground: 122 45% 70%;
+
+    --primary: 122 45% 70%;
+    --primary-foreground: 122 25% 8%;
+
+    --secondary: 122 18% 14%;
+    --secondary-foreground: 122 45% 70%;
+
+    --muted: 122 15% 16%;
+    --muted-foreground: 122 45% 70%;
+
+    --accent: 122 18% 18%;
+    --accent-foreground: 122 45% 70%;
+
+    --destructive: 122 45% 70%;
+    --destructive-foreground: 122 25% 8%;
+
+    --border: 122 18% 22%;
+    --input: 122 18% 22%;
+    --ring: 122 45% 70%;
+
+    --sidebar-background: 122 20% 10%;
+    --sidebar-foreground: 122 45% 70%;
+    --sidebar-primary: 122 45% 70%;
+    --sidebar-primary-foreground: 122 25% 8%;
+    --sidebar-accent: 122 18% 18%;
+    --sidebar-accent-foreground: 122 45% 70%;
+    --sidebar-border: 122 18% 22%;
+    --sidebar-ring: 122 45% 70%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Merriweather', Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Merriweather', Georgia, serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Merriweather', Georgia, serif;
+    @apply font-bold tracking-tight;
+  }
+
+  h1 {
+    @apply text-3xl md:text-4xl;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+}
+
+@layer components {
+  .card-elevated {
+    @apply bg-card rounded-xl border border-border;
+    box-shadow: var(--shadow-md);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .card-elevated:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-2px);
+  }
+
+  .card-static {
+    @apply bg-card rounded-xl border border-border;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-foreground to-muted-foreground;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground transition-all duration-200;
+  }
+
+  .nav-link:hover {
+    @apply bg-accent text-foreground;
+  }
+
+  .nav-link.active {
+    @apply bg-accent text-foreground font-medium;
+  }
+
+  .stat-card {
+    @apply card-elevated p-6;
+  }
+
+  .input-minimal {
+    @apply bg-transparent border-b-2 border-border focus:border-foreground outline-none transition-colors duration-200 py-2;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:opacity-90 active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground px-6 py-3 rounded-lg font-medium transition-all duration-200 hover:bg-accent active:scale-[0.98];
+  }
+
+  .heatmap-cell {
+    @apply rounded-sm transition-all duration-200 cursor-pointer;
+  }
+
+  .heatmap-cell:hover {
+    transform: scale(1.2);
+  }
+
+  .page-enter {
+    animation: pageEnter 0.4s ease-out;
+  }
+
+  @keyframes pageEnter {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+
+  .toggle-switch {
+    @apply relative w-12 h-6 bg-muted rounded-full cursor-pointer transition-colors duration-300;
+  }
+
+  .toggle-switch.active {
+    @apply bg-foreground;
+  }
+
+  .toggle-switch::after {
+    content: '';
+    @apply absolute top-1 left-1 w-4 h-4 bg-background rounded-full transition-transform duration-300;
+  }
+
+  .toggle-switch.active::after {
+    transform: translateX(24px);
+  }
+
+  .ripple {
+    @apply relative overflow-hidden;
+  }
+
+  .ripple::after {
+    content: '';
+    @apply absolute inset-0 bg-foreground opacity-0 rounded-lg transition-opacity duration-300;
+  }
+
+  .ripple:active::after {
+    @apply opacity-5;
+  }
+}
