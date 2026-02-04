@@ -1,5 +1,6 @@
 # Growth Dashboard
-
+<img width="1918" height="968" alt="Screenshot 2026-02-05 025629" src="https://github.com/user-attachments/assets/095942c1-5261-4f76-badb-23b16b16b611" />
+<img width="1910" height="954" alt="Screenshot 2026-02-05 025754" src="https://github.com/user-attachments/assets/b77cb70f-1691-49ea-b7d3-4bc1c1ce4504" />
 Personal dashboard for prayer tracking, daily objectives, academic repository, analytics, and events.
 
 ## Overview
@@ -173,3 +174,7 @@ Migrations are stored in server/migrations. To run them:
 - If Google Drive upload fails, ensure the OAuth app has test users or is published.
 - If emails don’t send, confirm SMTP credentials and allow Gmail App Passwords.
 - If APIs fail, verify that the backend is running and .env is configured.
+<img width="1877" height="967" alt="Screenshot 2026-02-05 030020" src="https://github.com/user-attachments/assets/a1e8ccf7-983e-43fa-946d-02674af39955" />
+<img width="1893" height="908" alt="Screenshot 2026-02-05 025950" src="https://github.com/user-attachments/assets/c9cc235b-20de-489d-8d16-124c7b1ddb35" />
+<img width="1919" height="820" alt="Screenshot 2026-02-05 025930" src="https://github.com/user-attachments/assets/ed0cb5c1-4b41-4334-88e0-7b6489a810ba" />
+<img width="1891" height="951" alt="Screenshot 2026-02-05 025916" src="https://github.com/user-attachments/assets/94a3ebd8-a043-4e4c-9508-3cb542a98456" />
