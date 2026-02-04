@@ -10,59 +10,59 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 122 43% 39%;
+    --foreground: 122 52% 28%;
 
     --card: 0 0% 100%;
-    --card-foreground: 122 43% 39%;
+    --card-foreground: 122 52% 28%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 122 43% 39%;
+    --popover-foreground: 122 52% 28%;
 
-    --primary: 122 43% 39%;
-    --primary-foreground: 122 45% 90%;
+    --primary: 122 55% 32%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 100%;
-    --secondary-foreground: 122 43% 39%;
+    --secondary: 122 40% 96%;
+    --secondary-foreground: 122 52% 28%;
 
-    --muted: 0 0% 100%;
-    --muted-foreground: 122 43% 39%;
+    --muted: 122 38% 96%;
+    --muted-foreground: 122 30% 38%;
 
-    --accent: 0 0% 100%;
-    --accent-foreground: 122 43% 39%;
+    --accent: 122 40% 94%;
+    --accent-foreground: 122 52% 28%;
 
-    --destructive: 122 43% 39%;
-    --destructive-foreground: 122 45% 90%;
+    --destructive: 122 55% 32%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 122 30% 80%;
-    --input: 122 30% 80%;
-    --ring: 122 43% 39%;
+    --border: 122 30% 78%;
+    --input: 122 30% 78%;
+    --ring: 122 55% 32%;
 
     --radius: 0.75rem;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 122 43% 39%;
-    --sidebar-primary: 122 43% 39%;
-    --sidebar-primary-foreground: 122 45% 90%;
-    --sidebar-accent: 0 0% 100%;
-    --sidebar-accent-foreground: 122 43% 39%;
-    --sidebar-border: 122 30% 80%;
-    --sidebar-ring: 122 43% 39%;
+    --sidebar-foreground: 122 30% 38%;
+    --sidebar-primary: 122 55% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 122 40% 94%;
+    --sidebar-accent-foreground: 122 52% 28%;
+    --sidebar-border: 122 30% 78%;
+    --sidebar-ring: 122 55% 32%;
 
     /* Custom tokens for this design */
     --surface-elevated: 0 0% 100%;
-    --surface-sunken: 0 0% 100%;
-    --text-primary: 122 43% 39%;
-    --text-secondary: 122 43% 39%;
-    --text-muted: 122 43% 39%;
-    --divider: 122 30% 80%;
-    --hover-dark: 122 43% 39%;
+    --surface-sunken: 122 40% 96%;
+    --text-primary: 122 52% 28%;
+    --text-secondary: 122 30% 38%;
+    --text-muted: 122 22% 55%;
+    --divider: 122 30% 78%;
+    --hover-dark: 122 55% 32%;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px 0 hsl(122 46% 34% / 0.1);
-    --shadow-md: 0 4px 6px -1px hsl(122 46% 34% / 0.12), 0 2px 4px -2px hsl(122 46% 34% / 0.08);
-    --shadow-lg: 0 10px 15px -3px hsl(122 46% 34% / 0.14), 0 4px 6px -4px hsl(122 46% 34% / 0.1);
-    --shadow-xl: 0 20px 25px -5px hsl(122 46% 34% / 0.16), 0 8px 10px -6px hsl(122 46% 34% / 0.12);
-    --shadow-hover: 0 20px 40px -10px hsl(122 46% 34% / 0.2);
+    --shadow-sm: 0 1px 2px 0 hsl(122 55% 20% / 0.08);
+    --shadow-md: 0 4px 6px -1px hsl(122 55% 20% / 0.12), 0 2px 4px -2px hsl(122 55% 20% / 0.08);
+    --shadow-lg: 0 10px 15px -3px hsl(122 55% 20% / 0.14), 0 4px 6px -4px hsl(122 55% 20% / 0.1);
+    --shadow-xl: 0 20px 25px -5px hsl(122 55% 20% / 0.16), 0 8px 10px -6px hsl(122 55% 20% / 0.12);
+    --shadow-hover: 0 20px 40px -10px hsl(122 55% 20% / 0.2);
   }
 
   .dark {
@@ -142,6 +142,7 @@
 @layer components {
   .card-elevated {
     @apply bg-card rounded-xl border border-border;
+    outline: 1px solid hsl(var(--border));
     box-shadow: var(--shadow-md);
     transition: box-shadow 0.3s ease, transform 0.3s ease;
   }
@@ -153,6 +154,7 @@
 
   .card-static {
     @apply bg-card rounded-xl border border-border;
+    outline: 1px solid hsl(var(--border));
     box-shadow: var(--shadow-sm);
   }
 
@@ -189,7 +191,7 @@
   }
 
   .heatmap-cell {
-    @apply rounded-sm transition-all duration-200 cursor-pointer;
+    @apply rounded-sm transition-all duration-200 cursor-pointer border border-border;
   }
 
   .heatmap-cell:hover {
@@ -218,7 +220,7 @@
   .stagger-5 { animation-delay: 0.25s; }
 
   .toggle-switch {
-    @apply relative w-12 h-6 bg-muted rounded-full cursor-pointer transition-colors duration-300;
+    @apply relative w-12 h-6 bg-accent border border-border rounded-full cursor-pointer transition-colors duration-300;
   }
 
   .toggle-switch.active {
@@ -227,7 +229,7 @@
 
   .toggle-switch::after {
     content: '';
-    @apply absolute top-1 left-1 w-4 h-4 bg-background rounded-full transition-transform duration-300;
+    @apply absolute top-1 left-1 w-4 h-4 bg-background rounded-full transition-transform duration-300 border border-border;
   }
 
   .toggle-switch.active::after {

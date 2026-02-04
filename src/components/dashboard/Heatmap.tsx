@@ -18,7 +18,7 @@ export default function Heatmap({ data, weeks = 20 }: HeatmapProps) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
-      const value = data?.[dateStr] ?? Math.floor(Math.random() * 5); // Mock data
+      const value = data?.[dateStr] ?? 0;
       const dayOfWeek = date.getDay();
       result.push({ date: dateStr, value, dayOfWeek });
     }

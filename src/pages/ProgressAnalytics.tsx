@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import MainLayout from '@/components/layout/MainLayout';
 import Header from '@/components/layout/Header';
 import Heatmap from '@/components/dashboard/Heatmap';
 import TrendCard from '@/components/analytics/TrendCard';
 import TrendChart from '@/components/analytics/TrendChart';
+import { api } from '@/lib/api';
+import ApiStatusBanner from '@/components/common/ApiStatusBanner';
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -14,11 +16,46 @@ const months = [
 export default function ProgressAnalytics() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [heatmapData, setHeatmapData] = useState<Record<string, number>>({});
+  const [trendData, setTrendData] = useState<number[]>([]);
+  const [summary, setSummary] = useState({
+    weeklyPrayerRate: "0%",
+    taskCompletionRate: "0%",
+    consistencyScore: "0",
+  });
+  const [error, setError] = useState<string | undefined>();
+
+  const loadAnalytics = async () => {
+    try {
+      const [heatmapResponse, trendResponse, summaryResponse] = await Promise.all([
+        api.get<{ data: Record<string, number> }>("/api/analytics/heatmap?weeks=26"),
+        api.get<{ data: number[] }>("/api/analytics/trend?days=30"),
+        api.get<{ data: { weeklyPrayerRate: string; taskCompletionRate: string; consistencyScore: string } }>(
+          "/api/analytics/summary"
+        ),
+      ]);
+      setHeatmapData(heatmapResponse.data || {});
+      setTrendData(trendResponse.data || []);
+      if (summaryResponse.data) {
+        setSummary(summaryResponse.data);
+      }
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to load analytics data.');
+    }
+  };
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
 
   return (
     <MainLayout>
       <div className="page-enter">
         <Header title="Progress Analytics" />
+
+        <ApiStatusBanner message={error} />
 
         {/* Heatmap Section */}
         <div className="card-static p-6 mb-8">
@@ -56,36 +93,36 @@ export default function ProgressAnalytics() {
             </div>
           </div>
           
-          <Heatmap weeks={26} />
+          <Heatmap weeks={26} data={heatmapData} />
         </div>
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <TrendCard
             title="Weekly Prayer Rate"
-            value="94%"
+            value={summary.weeklyPrayerRate}
             trend="up"
-            trendValue="+3%"
+            trendValue="Updated"
             delay={100}
           />
           <TrendCard
             title="Task Completion"
-            value="87%"
+            value={summary.taskCompletionRate}
             trend="up"
-            trendValue="+8%"
+            trendValue="Updated"
             delay={150}
           />
           <TrendCard
             title="Consistency Score"
-            value="92"
+            value={summary.consistencyScore}
             trend="neutral"
-            trendValue="Stable"
+            trendValue="Updated"
             delay={200}
           />
         </div>
 
         {/* Trend Graph */}
-        <TrendChart height={250} />
+        <TrendChart height={250} data={trendData} />
       </div>
     </MainLayout>
   );

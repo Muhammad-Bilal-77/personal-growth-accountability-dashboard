@@ -7,8 +7,6 @@ import {
   BookOpen,
   BarChart3,
   Calendar,
-  Settings,
-  User,
   Menu,
   X,
 } from 'lucide-react';
@@ -112,28 +110,6 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Bottom Section */}
-        <div className="p-4 border-t border-sidebar-border space-y-1">
-          <Link
-            to="/settings"
-            onClick={() => setIsMobileOpen(false)}
-            className={cn(
-              'nav-link ripple group',
-              location.pathname === '/settings' && 'active'
-            )}
-          >
-            <Settings className="w-5 h-5 flex-shrink-0 text-muted-foreground group-hover:text-foreground" />
-            {!isCollapsed && <span>Settings</span>}
-          </Link>
-          <div className="nav-link group cursor-pointer">
-            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4 text-muted-foreground" />
-            </div>
-            {!isCollapsed && (
-              <span className="text-muted-foreground">Profile</span>
-            )}
-          </div>
-        </div>
       </aside>
     </>
   );

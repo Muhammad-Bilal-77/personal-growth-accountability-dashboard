@@ -1,46 +1,83 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import Header from '@/components/layout/Header';
 import TaskInput from '@/components/objectives/TaskInput';
 import TaskItem from '@/components/objectives/TaskItem';
 import LinearProgress from '@/components/dashboard/LinearProgress';
+import { api } from '@/lib/api';
+import ApiStatusBanner from '@/components/common/ApiStatusBanner';
 
 interface Task {
   id: string;
   text: string;
   completed: boolean;
+  due_at?: string | null;
 }
 
-const initialTasks: Task[] = [
-  { id: '1', text: 'Complete morning reflection', completed: true },
-  { id: '2', text: 'Review study notes for 30 minutes', completed: true },
-  { id: '3', text: 'Read 20 pages of current book', completed: true },
-  { id: '4', text: 'Exercise for at least 20 minutes', completed: false },
-  { id: '5', text: 'Practice gratitude journaling', completed: false },
-  { id: '6', text: 'Review weekly goals progress', completed: false },
-  { id: '7', text: 'Prepare materials for tomorrow', completed: true },
-];
+const getToday = () => new Date().toISOString().split('T')[0];
 
 export default function DailyObjectives() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [error, setError] = useState<string | undefined>();
 
-  const handleAdd = (text: string) => {
-    const newTask: Task = {
-      id: Date.now().toString(),
-      text,
-      completed: false,
-    };
-    setTasks([...tasks, newTask]);
+  const loadTasks = async () => {
+    try {
+      const response = await api.get<{ data: Task[] }>(`/api/tasks?date=${getToday()}`);
+      setTasks(response.data || []);
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to load tasks from the backend.');
+    }
   };
 
-  const handleToggle = (id: string) => {
-    setTasks(tasks.map(task =>
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  const handleAdd = async (text: string, dueAt?: string | null) => {
+    try {
+      const response = await api.post<{ data: Task }>("/api/tasks", {
+        text,
+        task_date: getToday(),
+        due_at: dueAt || null,
+      });
+      if (response.data) {
+        setTasks((prev) => [...prev, response.data]);
+      }
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to create a task.');
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setTasks(tasks.filter(task => task.id !== id));
+  const handleToggle = async (id: string) => {
+    const current = tasks.find((task) => task.id === id);
+    if (!current) return;
+    try {
+      const response = await api.patch<{ data: Task }>(`/api/tasks/${id}`, {
+        completed: !current.completed,
+      });
+      if (response.data) {
+        setTasks((prev) => prev.map((task) => (task.id === id ? response.data : task)));
+      }
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to update the task status.');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await api.delete<{ success: boolean }>(`/api/tasks/${id}`);
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to delete the task.');
+    }
   };
 
   const completedCount = tasks.filter(t => t.completed).length;
@@ -50,6 +87,8 @@ export default function DailyObjectives() {
     <MainLayout>
       <div className="page-enter">
         <Header title="Daily Objectives" />
+
+        <ApiStatusBanner message={error} />
 
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Add Task Section */}

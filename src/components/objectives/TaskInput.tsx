@@ -2,17 +2,20 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 
 interface TaskInputProps {
-  onAdd: (text: string) => void;
+  onAdd: (text: string, dueAt?: string | null) => void;
 }
 
 export default function TaskInput({ onAdd }: TaskInputProps) {
   const [text, setText] = useState('');
+  const [time, setTime] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (text.trim()) {
-      onAdd(text.trim());
+      const dueAt = time ? new Date(`${new Date().toISOString().split('T')[0]}T${time}:00`).toISOString() : null;
+      onAdd(text.trim(), dueAt);
       setText('');
+      setTime('');
     }
   };
 
@@ -28,6 +31,13 @@ export default function TaskInput({ onAdd }: TaskInputProps) {
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter your objective..."
           className="input-minimal flex-1 text-foreground placeholder:text-muted-foreground"
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="input-minimal w-32 text-foreground"
+          aria-label="Reminder time"
         />
         <button
           type="submit"

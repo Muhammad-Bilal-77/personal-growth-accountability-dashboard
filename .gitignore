@@ -12,6 +12,19 @@ dist
 dist-ssr
 *.local
 
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+
+# Runtime uploads
+uploads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,10 @@
+alter table tasks disable row level security;
+alter table prayers disable row level security;
+alter table prayer_logs disable row level security;
+alter table events disable row level security;
+alter table subjects disable row level security;
+alter table chapters disable row level security;
+alter table lessons disable row level security;
+alter table lesson_views disable row level security;
+alter table activity_log disable row level security;
+alter table settings_sections disable row level security;

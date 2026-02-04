@@ -8,8 +8,7 @@ interface TrendChartProps {
 export default function TrendChart({ data, height = 200 }: TrendChartProps) {
   const chartData = useMemo(() => {
     if (data) return data;
-    // Generate mock data
-    return Array.from({ length: 30 }, () => Math.floor(Math.random() * 80) + 20);
+    return Array.from({ length: 30 }, () => 0);
   }, [data]);
 
   const max = Math.max(...chartData);

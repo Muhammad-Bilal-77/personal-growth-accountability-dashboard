@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import Header from '@/components/layout/Header';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import EventModal from '@/components/calendar/EventModal';
 import { Calendar, Tag } from 'lucide-react';
+import { api } from '@/lib/api';
+import ApiStatusBanner from '@/components/common/ApiStatusBanner';
 
 interface Event {
   id: string;
@@ -13,32 +15,48 @@ interface Event {
   notes?: string;
 }
 
-const mockEvents: Event[] = [
-  { id: '1', title: 'Study Group Meeting', date: '2024-02-15', category: 'Academic' },
-  { id: '2', title: 'Doctor Appointment', date: '2024-02-18', category: 'Health' },
-  { id: '3', title: 'Family Dinner', date: '2024-02-20', category: 'Personal' },
-];
-
 export default function EventCalendar() {
-  const [events, setEvents] = useState<Event[]>(mockEvents);
+  const [events, setEvents] = useState<Event[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const loadEvents = async () => {
+    try {
+      const response = await api.get<{ data: Event[] }>("/api/events");
+      setEvents(response.data || []);
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to load events from the backend.');
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
   const handleSelectDate = (date: Date) => {
     setSelectedDate(date);
     setIsModalOpen(true);
   };
 
-  const handleSaveEvent = (event: { title: string; category: string; notes: string }) => {
-    if (selectedDate) {
-      const newEvent: Event = {
-        id: Date.now().toString(),
+  const handleSaveEvent = async (event: { title: string; category: string; notes: string }) => {
+    if (!selectedDate) return;
+    try {
+      const response = await api.post<{ data: Event }>("/api/events", {
         title: event.title,
         date: selectedDate.toISOString().split('T')[0],
         category: event.category,
         notes: event.notes,
-      };
-      setEvents([...events, newEvent]);
+      });
+      if (response.data) {
+        setEvents((prev) => [...prev, response.data]);
+      }
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to save the event.');
     }
   };
 
@@ -51,6 +69,8 @@ export default function EventCalendar() {
     <MainLayout>
       <div className="page-enter">
         <Header title="Event Calendar" />
+
+        <ApiStatusBanner message={error} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Calendar */}
