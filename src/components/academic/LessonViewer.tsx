@@ -49,7 +49,8 @@ export default function LessonViewer({
   }, [content, isEditing]);
 
   useEffect(() => {
-    if (isEditing && editorRef.current) {
+    if (!isEditing || !editorRef.current) return;
+    if (editorRef.current.innerHTML !== (draftContent || '')) {
       editorRef.current.innerHTML = draftContent || '';
     }
   }, [isEditing, draftContent]);
