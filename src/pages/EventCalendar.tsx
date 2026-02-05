@@ -18,6 +18,7 @@ interface Event {
 export default function EventCalendar() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
+  const [selectedEvent, setSelectedEvent] = useState<Event | undefined>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -38,25 +39,57 @@ export default function EventCalendar() {
 
   const handleSelectDate = (date: Date) => {
     setSelectedDate(date);
+    setSelectedEvent(undefined);
     setIsModalOpen(true);
   };
 
   const handleSaveEvent = async (event: { title: string; category: string; notes: string }) => {
     if (!selectedDate) return;
     try {
-      const response = await api.post<{ data: Event }>("/api/events", {
-        title: event.title,
-        date: selectedDate.toISOString().split('T')[0],
-        category: event.category,
-        notes: event.notes,
-      });
-      if (response.data) {
-        setEvents((prev) => [...prev, response.data]);
+      if (selectedEvent) {
+        const response = await api.patch<{ data: Event }>(`/api/events/${selectedEvent.id}`, {
+          title: event.title,
+          date: selectedDate.toISOString().split('T')[0],
+          category: event.category,
+          notes: event.notes,
+        });
+        if (response.data) {
+          setEvents((prev) => prev.map((item) => (item.id === response.data.id ? response.data : item)));
+        }
+      } else {
+        const response = await api.post<{ data: Event }>("/api/events", {
+          title: event.title,
+          date: selectedDate.toISOString().split('T')[0],
+          category: event.category,
+          notes: event.notes,
+        });
+        if (response.data) {
+          setEvents((prev) => [...prev, response.data]);
+        }
       }
       setError(undefined);
     } catch (error) {
       console.error(error);
       setError('Unable to save the event.');
+    }
+  };
+
+  const handleEditEvent = (event: Event) => {
+    setSelectedDate(new Date(event.date));
+    setSelectedEvent(event);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteEvent = async (event: Event) => {
+    const confirmed = window.confirm(`Delete "${event.title}"?`);
+    if (!confirmed) return;
+    try {
+      await api.delete(`/api/events/${event.id}`);
+      setEvents((prev) => prev.filter((item) => item.id !== event.id));
+      setError(undefined);
+    } catch (error) {
+      console.error(error);
+      setError('Unable to delete the event.');
     }
   };
 
@@ -130,10 +163,15 @@ export default function EventCalendar() {
                 </h4>
                 <div className="space-y-2">
                   {selectedDateEvents.map(event => (
-                    <div key={event.id} className="p-3 bg-accent rounded-lg">
+                    <button
+                      key={event.id}
+                      type="button"
+                      className="p-3 bg-accent rounded-lg text-left hover:bg-border transition-colors"
+                      onClick={() => handleEditEvent(event)}
+                    >
                       <p className="font-medium text-foreground">{event.title}</p>
                       <p className="text-xs text-muted-foreground">{event.category}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -144,9 +182,14 @@ export default function EventCalendar() {
         {/* Event Modal */}
         <EventModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          onClose={() => {
+            setIsModalOpen(false);
+            setSelectedEvent(undefined);
+          }}
           onSave={handleSaveEvent}
+          onDelete={selectedEvent ? () => handleDeleteEvent(selectedEvent) : undefined}
           date={selectedDate || new Date()}
+          initialEvent={selectedEvent ? { title: selectedEvent.title, category: selectedEvent.category, notes: selectedEvent.notes } : null}
         />
       </div>
     </MainLayout>

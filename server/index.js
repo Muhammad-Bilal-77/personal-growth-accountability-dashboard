@@ -895,6 +895,40 @@ app.post("/api/events", async (req, res) => {
   });
 });
 
+app.patch("/api/events/:id", async (req, res) => {
+  if (!ensureSupabase(res)) return;
+  const { id } = req.params;
+  const { title, date, category, notes } = req.body ?? {};
+
+  const updates = {};
+  if (title !== undefined) updates.title = title;
+  if (date !== undefined) updates.event_date = getDateString(date);
+  if (category !== undefined) updates.category = category;
+  if (notes !== undefined) updates.notes = notes;
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("events")
+    .update(updates)
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  return res.json({
+    data: {
+      id: data.id,
+      title: data.title,
+      date: data.event_date,
+      category: data.category,
+      notes: data.notes ?? "",
+    },
+  });
+});
+
 app.delete("/api/events/:id", async (req, res) => {
   if (!ensureSupabase(res)) return;
   const { id } = req.params;

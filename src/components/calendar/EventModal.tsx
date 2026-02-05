@@ -1,19 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 interface EventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (event: { title: string; category: string; notes: string }) => void;
+  onDelete?: () => void;
   date: Date;
+  initialEvent?: { title: string; category: string; notes?: string } | null;
 }
 
 const categories = ['Personal', 'Academic', 'Spiritual', 'Health', 'Work'];
 
-export default function EventModal({ isOpen, onClose, onSave, date }: EventModalProps) {
+export default function EventModal({
+  isOpen,
+  onClose,
+  onSave,
+  onDelete,
+  date,
+  initialEvent,
+}: EventModalProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(categories[0]);
   const [notes, setNotes] = useState('');
+
+  const isEditing = Boolean(initialEvent);
 
   if (!isOpen) return null;
 
@@ -28,6 +39,25 @@ export default function EventModal({ isOpen, onClose, onSave, date }: EventModal
     }
   };
 
+  const handleDelete = () => {
+    if (!onDelete) return;
+    onDelete();
+    onClose();
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialEvent) {
+      setTitle(initialEvent.title);
+      setCategory(initialEvent.category);
+      setNotes(initialEvent.notes ?? '');
+      return;
+    }
+    setTitle('');
+    setCategory(categories[0]);
+    setNotes('');
+  }, [isOpen, initialEvent]);
+
   const formattedDate = date.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -41,7 +71,7 @@ export default function EventModal({ isOpen, onClose, onSave, date }: EventModal
       <div className="relative bg-background border border-border rounded-2xl shadow-xl max-w-md w-full p-6 animate-scale-in">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl font-bold text-foreground">New Event</h2>
+            <h2 className="text-xl font-bold text-foreground">{isEditing ? 'Edit Event' : 'New Event'}</h2>
             <p className="text-sm text-muted-foreground">{formattedDate}</p>
           </div>
           <button
@@ -96,13 +126,24 @@ export default function EventModal({ isOpen, onClose, onSave, date }: EventModal
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={!title.trim()}
-            className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Save Event
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isEditing ? 'Update Event' : 'Save Event'}
+            </button>
+            {onDelete && (
+              <button
+                type="button"
+                className="w-full btn-secondary"
+                onClick={handleDelete}
+              >
+                Delete Event
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>
