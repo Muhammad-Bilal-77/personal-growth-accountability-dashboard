@@ -174,7 +174,7 @@ export default function PrayerTracker() {
 
           {/* Reset Notice */}
           <p className="text-center text-sm text-muted-foreground mt-8">
-            Resets daily at 12 PM
+            Resets daily at 12 AM
           </p>
 
           {/* History */}

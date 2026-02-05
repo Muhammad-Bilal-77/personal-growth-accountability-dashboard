@@ -60,11 +60,7 @@ const getDateString = (value) => {
 const getPrayerDate = (value) => {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return getDateString();
-  const adjusted = new Date(date);
-  if (adjusted.getHours() < 12) {
-    adjusted.setDate(adjusted.getDate() - 1);
-  }
-  return getDateString(adjusted);
+  return getDateString(date);
 };
 
 const ensureSupabase = (res) => {
