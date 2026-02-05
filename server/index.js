@@ -179,9 +179,50 @@ const getPrayerTimings = async ({ lat, lng, date, timezone }) => {
 };
 
 const parseTime = (dateStr, timeStr, tz) => {
-  const [hour, minute] = timeStr.split(":");
-  const date = new Date(`${dateStr}T${hour.padStart(2, "0")}:${minute.padStart(2, "0")}:00`);
-  return new Date(date.toLocaleString("en-US", { timeZone: tz }));
+  const cleanTime = (timeStr || "").split(" ")[0].trim();
+  const [hourStr, minuteStr] = cleanTime.split(":");
+  const [yearStr, monthStr, dayStr] = (dateStr || "").split("-");
+
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const hour = Number(hourStr);
+  const minute = Number(minuteStr);
+
+  if (
+    Number.isNaN(year)
+    || Number.isNaN(month)
+    || Number.isNaN(day)
+    || Number.isNaN(hour)
+    || Number.isNaN(minute)
+  ) {
+    return new Date("invalid");
+  }
+
+  const utcGuess = new Date(Date.UTC(year, month - 1, day, hour, minute, 0));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz || "UTC",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(utcGuess);
+
+  const getPart = (type) => Number(parts.find((part) => part.type === type)?.value);
+  const tzYear = getPart("year");
+  const tzMonth = getPart("month");
+  const tzDay = getPart("day");
+  const tzHour = getPart("hour");
+  const tzMinute = getPart("minute");
+  const tzSecond = getPart("second");
+
+  const tzAsUtc = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond);
+  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const offsetMs = tzAsUtc - desiredAsUtc;
+  return new Date(utcGuess.getTime() - offsetMs);
 };
 
 const shouldSendNotification = async (type, dateStr, referenceId = "") => {
