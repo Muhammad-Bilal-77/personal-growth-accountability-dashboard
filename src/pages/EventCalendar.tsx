@@ -15,6 +15,15 @@ interface Event {
   notes?: string;
 }
 
+const formatLocalDate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDate = (value: string) => new Date(`${value}T00:00:00`);
+
 export default function EventCalendar() {
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -43,28 +52,35 @@ export default function EventCalendar() {
     setIsModalOpen(true);
   };
 
-  const handleSaveEvent = async (event: { title: string; category: string; notes: string }) => {
-    if (!selectedDate) return;
+  const handleSaveEvent = async (event: { title: string; category: string; notes: string; date: string }) => {
+    const dateStr = event.date;
+    if (!dateStr) return;
     try {
       if (selectedEvent) {
-        const response = await api.patch<{ data: Event }>(`/api/events/${selectedEvent.id}`, {
+        await api.delete(`/api/events/${selectedEvent.id}`);
+        const response = await api.post<{ data: Event }>("/api/events", {
           title: event.title,
-          date: selectedDate.toISOString().split('T')[0],
+          date: dateStr,
           category: event.category,
           notes: event.notes,
         });
         if (response.data) {
-          setEvents((prev) => prev.map((item) => (item.id === response.data.id ? response.data : item)));
+          setEvents((prev) => [
+            ...prev.filter((item) => item.id !== selectedEvent.id),
+            response.data,
+          ]);
+          setSelectedDate(parseLocalDate(response.data.date));
         }
       } else {
         const response = await api.post<{ data: Event }>("/api/events", {
           title: event.title,
-          date: selectedDate.toISOString().split('T')[0],
+          date: dateStr,
           category: event.category,
           notes: event.notes,
         });
         if (response.data) {
           setEvents((prev) => [...prev, response.data]);
+          setSelectedDate(parseLocalDate(response.data.date));
         }
       }
       setError(undefined);
@@ -75,7 +91,7 @@ export default function EventCalendar() {
   };
 
   const handleEditEvent = (event: Event) => {
-    setSelectedDate(new Date(event.date));
+    setSelectedDate(parseLocalDate(event.date));
     setSelectedEvent(event);
     setIsModalOpen(true);
   };
@@ -95,7 +111,7 @@ export default function EventCalendar() {
 
   // Get events for selected date
   const selectedDateEvents = selectedDate
-    ? events.filter(e => e.date === selectedDate.toISOString().split('T')[0])
+    ? events.filter(e => e.date === formatLocalDate(selectedDate))
     : [];
 
   return (
@@ -123,9 +139,11 @@ export default function EventCalendar() {
             
             <div className="space-y-4">
               {events.slice(0, 5).map((event, index) => (
-                <div
+                <button
                   key={event.id}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors opacity-0 animate-fade-in"
+                  type="button"
+                  onClick={() => handleEditEvent(event)}
+                  className="w-full text-left flex items-start gap-3 p-3 rounded-lg hover:bg-accent transition-colors opacity-0 animate-fade-in"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
@@ -138,13 +156,13 @@ export default function EventCalendar() {
                       <span className="text-xs text-muted-foreground">{event.category}</span>
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {new Date(event.date).toLocaleDateString('en-US', {
+                      {parseLocalDate(event.date).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                       })}
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
 
               {events.length === 0 && (
@@ -190,6 +208,7 @@ export default function EventCalendar() {
           onDelete={selectedEvent ? () => handleDeleteEvent(selectedEvent) : undefined}
           date={selectedDate || new Date()}
           initialEvent={selectedEvent ? { title: selectedEvent.title, category: selectedEvent.category, notes: selectedEvent.notes } : null}
+          initialDate={selectedEvent?.date ?? formatLocalDate(selectedDate || new Date())}
         />
       </div>
     </MainLayout>

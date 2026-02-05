@@ -19,6 +19,13 @@ interface CalendarGridProps {
 export default function CalendarGrid({ events = [], onSelectDate, selectedDate }: CalendarGridProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
+  const formatLocalDate = (value: Date) => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const daysInMonth = useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
@@ -63,7 +70,7 @@ export default function CalendarGrid({ events = [], onSelectDate, selectedDate }
   };
 
   const hasEvents = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     return events.some(event => event.date === dateStr);
   };
 

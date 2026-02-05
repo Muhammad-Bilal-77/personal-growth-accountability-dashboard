@@ -675,7 +675,6 @@ app.patch("/api/tasks/:id", async (req, res) => {
   const updates = {};
   if (text !== undefined) updates.text = text;
   if (completed !== undefined) updates.completed = completed;
-  updates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("tasks")

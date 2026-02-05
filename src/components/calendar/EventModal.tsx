@@ -4,10 +4,11 @@ import { X } from 'lucide-react';
 interface EventModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (event: { title: string; category: string; notes: string }) => void;
+  onSave: (event: { title: string; category: string; notes: string; date: string }) => void;
   onDelete?: () => void;
   date: Date;
   initialEvent?: { title: string; category: string; notes?: string } | null;
+  initialDate?: string;
 }
 
 const categories = ['Personal', 'Academic', 'Spiritual', 'Health', 'Work'];
@@ -19,22 +20,23 @@ export default function EventModal({
   onDelete,
   date,
   initialEvent,
+  initialDate,
 }: EventModalProps) {
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState(categories[0]);
   const [notes, setNotes] = useState('');
+  const [eventDate, setEventDate] = useState('');
 
   const isEditing = Boolean(initialEvent);
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (title.trim()) {
-      onSave({ title: title.trim(), category, notes: notes.trim() });
+    if (title.trim() && eventDate) {
+      onSave({ title: title.trim(), category, notes: notes.trim(), date: eventDate });
       setTitle('');
       setNotes('');
       setCategory(categories[0]);
+      setEventDate('');
       onClose();
     }
   };
@@ -51,14 +53,19 @@ export default function EventModal({
       setTitle(initialEvent.title);
       setCategory(initialEvent.category);
       setNotes(initialEvent.notes ?? '');
+      setEventDate(initialDate ?? '');
       return;
     }
     setTitle('');
     setCategory(categories[0]);
     setNotes('');
-  }, [isOpen, initialEvent]);
+    setEventDate(initialDate ?? '');
+  }, [isOpen, initialEvent, initialDate]);
 
-  const formattedDate = date.toLocaleDateString('en-US', {
+  if (!isOpen) return null;
+
+  const displayDate = eventDate ? new Date(`${eventDate}T00:00:00`) : date;
+  const formattedDate = displayDate.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -100,6 +107,18 @@ export default function EventModal({
 
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-2">
+              Date
+            </label>
+            <input
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+              className="w-full input-minimal"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Category
             </label>
             <select
@@ -129,7 +148,7 @@ export default function EventModal({
           <div className="flex flex-col gap-2">
             <button
               type="submit"
-              disabled={!title.trim()}
+              disabled={!title.trim() || !eventDate}
               className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isEditing ? 'Update Event' : 'Save Event'}
