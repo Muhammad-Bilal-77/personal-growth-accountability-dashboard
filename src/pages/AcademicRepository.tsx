@@ -233,16 +233,19 @@ export default function AcademicRepository() {
     try {
       const response = await api.patch<{ data: LessonDetail }>(`/api/lessons/${currentLesson.id}`, payload);
       if (response.data) {
-        setCurrentLesson(normalizeLesson(response.data));
+        const updatedLesson = normalizeLesson(response.data);
+        setCurrentLesson(updatedLesson);
+        // Update subjects tree to reflect changes
+        loadSubjects();
+        // Update lessons list to reflect changes
+        loadLessons(searchQuery);
       }
-      loadSubjects();
-      loadLessons(searchQuery);
-      setIsEditing(false);
-      toast('Lesson saved');
-      window.location.reload();
+      setError(undefined);
     } catch (error) {
       console.error(error);
       setError('Unable to save lesson changes.');
+      toast('Failed to save lesson');
+      throw error; // Re-throw to let the LessonViewer handle it
     }
   };
 
@@ -501,6 +504,7 @@ export default function AcademicRepository() {
               </button>
             )}
             <LessonViewer
+              lessonId={currentLesson?.id}
               title={currentLesson?.title}
               content={currentLesson?.content}
               fileUrl={currentLesson?.fileUrl ?? null}
