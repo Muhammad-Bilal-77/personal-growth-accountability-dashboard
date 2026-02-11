@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -15,7 +15,7 @@ interface PrayerCardProps {
   delay?: number;
 }
 
-export default function PrayerCard({ prayer, onToggle, delay = 0 }: PrayerCardProps) {
+function PrayerCard({ prayer, onToggle, delay = 0 }: PrayerCardProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleToggle = () => {
@@ -65,3 +65,12 @@ export default function PrayerCard({ prayer, onToggle, delay = 0 }: PrayerCardPr
     </div>
   );
 }
+
+// Memoize component to prevent unnecessary re-renders
+export default memo(PrayerCard, (prevProps, nextProps) => {
+  return (
+    prevProps.prayer.id === nextProps.prayer.id &&
+    prevProps.prayer.completed === nextProps.prayer.completed &&
+    prevProps.delay === nextProps.delay
+  );
+});

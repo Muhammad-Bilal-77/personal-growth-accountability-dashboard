@@ -5,14 +5,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.97] relative overflow-hidden",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-md active:shadow-sm",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md active:shadow-sm",
+        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground hover:shadow-sm",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 hover:shadow-sm",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
@@ -37,9 +37,43 @@ export interface ButtonProps
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+    
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      // Create ripple effect
+      const button = e.currentTarget;
+      const ripple = document.createElement('span');
+      const rect = button.getBoundingClientRect();
+      const size = Math.max(rect.width, rect.height);
+      const x = e.clientX - rect.left - size / 2;
+      const y = e.clientY - rect.top - size / 2;
+      
+      ripple.style.width = ripple.style.height = `${size}px`;
+      ripple.style.left = `${x}px`;
+      ripple.style.top = `${y}px`;
+      ripple.classList.add('ripple-effect');
+      
+      button.appendChild(ripple);
+      
+      setTimeout(() => {
+        ripple.remove();
+      }, 600);
+      
+      // Call original onClick
+      if (onClick) {
+        onClick(e);
+      }
+    };
+    
+    return (
+      <Comp 
+        className={cn(buttonVariants({ variant, size, className }))} 
+        ref={ref} 
+        onClick={handleClick}
+        {...props} 
+      />
+    );
   },
 );
 Button.displayName = "Button";

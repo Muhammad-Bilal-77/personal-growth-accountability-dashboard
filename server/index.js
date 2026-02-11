@@ -117,14 +117,163 @@ const mailer = EMAIL_HOST && EMAIL_HOST_USER && EMAIL_HOST_PASSWORD
     })
   : null;
 
-const sendMail = async ({ subject, text }) => {
+const sendMail = async ({ subject, text, html }) => {
   if (!mailer || !NOTIFY_EMAIL) return;
   await mailer.sendMail({
     from: EMAIL_HOST_USER,
     to: NOTIFY_EMAIL,
     subject,
     text,
+    html: html || text,
   });
+};
+
+const createPrayerTimingsEmailHTML = (timings, dateStr) => {
+  const prayers = [
+    { name: 'Fajr', time: timings.Fajr, icon: '🌅', color: '#667eea' },
+    { name: 'Dhuhr', time: timings.Dhuhr, icon: '☀️', color: '#f6ad55' },
+    { name: 'Asr', time: timings.Asr, icon: '🌤️', color: '#ed8936' },
+    { name: 'Maghrib', time: timings.Maghrib, icon: '🌆', color: '#9f7aea' },
+    { name: 'Isha', time: timings.Isha, icon: '🌙', color: '#4c51bf' },
+  ];
+
+  const prayerRows = prayers.map(p => `
+    <tr>
+      <td style="padding: 20px; border-bottom: 1px solid #e2e8f0;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="60">
+              <div style="width: 50px; height: 50px; border-radius: 12px; background: ${p.color}; display: flex; align-items: center; justify-content: center; font-size: 28px;">
+                ${p.icon}
+              </div>
+            </td>
+            <td style="padding-left: 15px;">
+              <h3 style="margin: 0; color: #2d3748; font-size: 20px; font-weight: 600;">${p.name}</h3>
+              <p style="margin: 5px 0 0 0; color: #718096; font-size: 14px;">Prayer Time</p>
+            </td>
+            <td style="text-align: right;">
+              <div style="background: #f7fafc; padding: 12px 20px; border-radius: 8px; display: inline-block;">
+                <span style="color: ${p.color}; font-size: 24px; font-weight: 700;">${p.time || '--:--'}</span>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Prayer Timings</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+      <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;">
+              <!-- Header -->
+              <tr>
+                <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                  <h1 style="margin: 0; color: white; font-size: 32px; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">🕌 Prayer Timings</h1>
+                  <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.95); font-size: 16px;">${new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                </td>
+              </tr>
+              
+              <!-- Prayer Times -->
+              ${prayerRows}
+              
+              <!-- Footer -->
+              <tr>
+                <td style="padding: 30px; text-align: center; background: #f7fafc; border-top: 3px solid #667eea;">
+                  <p style="margin: 0; color: #4a5568; font-size: 14px; line-height: 1.6;">
+                    📿 <strong>Remember:</strong> The first matter that the slave will be brought to account for on the Day of Judgment is the prayer.
+                  </p>
+                  <p style="margin: 15px 0 0 0; color: #718096; font-size: 12px;">
+                    May Allah accept your prayers • Daily Sanctuary
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+};
+
+const createPrayerReminderHTML = (prayerName, timeStr, message, hadith) => {
+  const icons = {
+    Fajr: '🌅',
+    Dhuhr: '☀️',
+    Asr: '🌤️',
+    Maghrib: '🌆',
+    Isha: '🌙'
+  };
+  
+  const colors = {
+    Fajr: '#667eea',
+    Dhuhr: '#f6ad55',
+    Asr: '#ed8936',
+    Maghrib: '#9f7aea',
+    Isha: '#4c51bf'
+  };
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f7fafc;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden;">
+              <tr>
+                <td style="padding: 40px 30px; text-align: center; background: ${colors[prayerName] || '#667eea'};">
+                  <div style="font-size: 64px; margin-bottom: 10px;">${icons[prayerName] || '🕌'}</div>
+                  <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700;">${prayerName} Prayer</h1>
+                  ${timeStr ? `<p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.95); font-size: 18px; font-weight: 500;">${timeStr}</p>` : ''}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 40px 30px;">
+                  <p style="margin: 0; color: #2d3748; font-size: 18px; line-height: 1.6; text-align: center;">
+                    ${message}
+                  </p>
+                </td>
+              </tr>
+              ${hadith ? `
+              <tr>
+                <td style="padding: 0 30px 40px 30px;">
+                  <div style="background: #f7fafc; border-left: 4px solid ${colors[prayerName] || '#667eea'}; padding: 20px; border-radius: 8px;">
+                    <p style="margin: 0; color: #4a5568; font-size: 15px; line-height: 1.7; font-style: italic;">
+                      📖 "${hadith}"
+                    </p>
+                  </div>
+                </td>
+              </tr>
+              ` : ''}
+              <tr>
+                <td style="padding: 0 30px 30px 30px; text-align: center;">
+                  <p style="margin: 0; color: #718096; font-size: 14px;">
+                    May Allah accept your prayers 🤲
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
 };
 
 const verifyPassword = async (input, stored) => {
@@ -540,7 +689,7 @@ app.post("/api/prayers/timings/email", async (req, res) => {
       timezone: location.timezone,
     });
 
-    const lines = [
+    const textLines = [
       `Prayer timings for ${todayStr}:`,
       `Fajr: ${timings.Fajr || "--"}`,
       `Dhuhr: ${timings.Dhuhr || "--"}`,
@@ -549,9 +698,12 @@ app.post("/api/prayers/timings/email", async (req, res) => {
       `Isha: ${timings.Isha || "--"}`,
     ].join("\n");
 
+    const htmlContent = createPrayerTimingsEmailHTML(timings, todayStr);
+
     await sendMail({
-      subject: "Today's prayer timings",
-      text: lines,
+      subject: "🕌 Today's Prayer Timings",
+      text: textLines,
+      html: htmlContent,
     });
 
     return res.json({ success: true });
@@ -1454,9 +1606,88 @@ app.use((req, res) => {
   res.status(404).json({ error: "Not found" });
 });
 
+const initializeDailyPrayerLogs = async () => {
+  if (!supabase) return;
+  try {
+    const todayStr = getDateString();
+    const { data: prayers } = await supabase
+      .from("prayers")
+      .select("id")
+      .order("sort_order", { ascending: true });
+
+    if (!prayers?.length) return;
+
+    // Check if logs already exist for today
+    const { data: existingLogs } = await supabase
+      .from("prayer_logs")
+      .select("id")
+      .eq("log_date", todayStr)
+      .limit(1);
+
+    // Only initialize if no logs exist for today
+    if (!existingLogs?.length) {
+      const logsToInsert = prayers.map(prayer => ({
+        prayer_id: prayer.id,
+        log_date: todayStr,
+        completed: false
+      }));
+
+      await supabase.from("prayer_logs").insert(logsToInsert);
+      console.log(`Initialized prayer logs for ${todayStr}`);
+    }
+  } catch (error) {
+    console.warn("Failed to initialize daily prayer logs:", error.message);
+  }
+};
+
+const sendDailyPrayerTimings = async () => {
+  if (!mailer || !NOTIFY_EMAIL || !supabase) return;
+  try {
+    const location = await getUserLocation();
+    if (!location) return;
+
+    const todayStr = getDateString();
+    const { timings } = await getPrayerTimings({
+      lat: location.lat,
+      lng: location.lng,
+      date: todayStr,
+      timezone: location.timezone,
+    });
+
+    const textLines = [
+      `Prayer timings for ${todayStr}:`,
+      `Fajr: ${timings.Fajr || "--"}`,
+      `Dhuhr: ${timings.Dhuhr || "--"}`,
+      `Asr: ${timings.Asr || "--"}`,
+      `Maghrib: ${timings.Maghrib || "--"}`,
+      `Isha: ${timings.Isha || "--"}`,
+    ].join("\n");
+
+    const htmlContent = createPrayerTimingsEmailHTML(timings, todayStr);
+
+    await sendMail({
+      subject: "🕌 Today's Prayer Timings",
+      text: textLines,
+      html: htmlContent,
+    });
+
+    console.log(`Sent prayer timings email for ${todayStr}`);
+  } catch (error) {
+    console.warn("Failed to send daily prayer timings:", error.message);
+  }
+};
+
 const scheduleNotifications = () => {
   if (!mailer || !NOTIFY_EMAIL) return;
 
+  // Initialize prayer logs at midnight (00:01)
+  cron.schedule("1 0 * * *", async () => {
+    console.log("Running midnight initialization...");
+    await initializeDailyPrayerLogs();
+    await sendDailyPrayerTimings();
+  });
+
+  // Check prayer times every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
     try {
       const location = await getUserLocation();
@@ -1482,9 +1713,14 @@ const scheduleNotifications = () => {
         if (minutesDiff <= 2) {
           const shouldSend = await shouldSendNotification("prayer_start", todayStr, prayerName);
           if (shouldSend) {
+            const message = `${prayerName} prayer time has started. Please perform your prayer now.`;
+            const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
+            const htmlContent = createPrayerReminderHTML(prayerName, timeStr, message, hadith);
+            
             await sendMail({
-              subject: `${prayerName} time has started`,
-              text: `${prayerName} prayer time has started at ${timeStr}.` ,
+              subject: `🕌 ${prayerName} Time Has Started`,
+              text: `${prayerName} prayer time has started at ${timeStr}.\n\nHadith: ${hadith}`,
+              html: htmlContent,
             });
             await markNotificationSent("prayer_start", todayStr, prayerName);
           }
@@ -1511,9 +1747,13 @@ const scheduleNotifications = () => {
             const shouldSend = await shouldSendNotification("prayer_half", todayStr, prayerName);
             if (shouldSend) {
               const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
+              const message = `${prayerName} time is halfway through. Please pray soon before the time runs out.`;
+              const htmlContent = createPrayerReminderHTML(prayerName, '', message, hadith);
+              
               await sendMail({
-                subject: `${prayerName} reminder`,
+                subject: `⏰ ${prayerName} Reminder - Time is Passing`,
                 text: `${prayerName} time is halfway through. Please pray soon.\n\nHadith: ${hadith}`,
+                html: htmlContent,
               });
               await markNotificationSent("prayer_half", todayStr, prayerName);
             }
@@ -1526,9 +1766,13 @@ const scheduleNotifications = () => {
             const shouldSend = await shouldSendNotification("prayer_end", todayStr, prayerName);
             if (shouldSend) {
               const hadith = hadiths[Math.floor(Math.random() * hadiths.length)];
+              const message = `⚠️ ${prayerName} time is ending in about ${minutesLeft} minutes. Please pray before it ends!`;
+              const htmlContent = createPrayerReminderHTML(prayerName, '', message, hadith);
+              
               await sendMail({
-                subject: `${prayerName} time ending soon`,
+                subject: `⚠️ ${prayerName} Time Ending Soon - ${minutesLeft} Min Left`,
                 text: `${prayerName} time is ending in about ${minutesLeft} minutes. Please pray before it ends.\n\nHadith: ${hadith}`,
+                html: htmlContent,
               });
               await markNotificationSent("prayer_end", todayStr, prayerName);
             }
@@ -1557,10 +1801,58 @@ const scheduleNotifications = () => {
       const shouldSend = await shouldSendNotification("event_reminder", dateStr, "daily");
       if (!shouldSend) return;
 
+      const eventListHTML = events.map(event => 
+        `<li style="padding: 12px; background: #f7fafc; margin-bottom: 10px; border-radius: 8px; border-left: 4px solid #667eea;">
+          <strong style="color: #2d3748; font-size: 16px;">${event.title}</strong>
+        </li>`
+      ).join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f7fafc;">
+          <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+            <tr>
+              <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden;">
+                  <tr>
+                    <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                      <div style="font-size: 64px; margin-bottom: 10px;">🗓️</div>
+                      <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700;">Upcoming Events Tomorrow</h1>
+                      <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.95); font-size: 16px;">${new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 40px 30px;">
+                      <ul style="list-style: none; padding: 0; margin: 0;">
+                        ${eventListHTML}
+                      </ul>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 0 30px 30px 30px; text-align: center;">
+                      <p style="margin: 0; color: #718096; font-size: 14px;">
+                        🔔 Daily Sanctuary • Stay organized
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </body>
+        </html>
+      `;
+
       const list = events.map((event) => `- ${event.title}`).join("\n");
       await sendMail({
-        subject: "Event reminder for tomorrow",
+        subject: "🗓️ Event Reminder for Tomorrow",
         text: `You have events scheduled for tomorrow (${dateStr}):\n${list}`,
+        html: htmlContent,
       });
       await markNotificationSent("event_reminder", dateStr, "daily");
     } catch (error) {
@@ -1591,9 +1883,54 @@ const scheduleNotifications = () => {
       if (error || !tasks?.length) return;
 
       for (const task of tasks) {
+        const dueDate = new Date(task.due_at);
+        const htmlContent = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          </head>
+          <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f7fafc;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="padding: 40px 20px;">
+              <tr>
+                <td align="center">
+                  <table width="600" cellpadding="0" cellspacing="0" style="background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden;">
+                    <tr>
+                      <td style="padding: 40px 30px; text-align: center; background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%);">
+                        <div style="font-size: 64px; margin-bottom: 10px;">\u23f0</div>
+                        <h1 style="margin: 0; color: white; font-size: 28px; font-weight: 700;">Task Reminder</h1>
+                        <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.95); font-size: 16px;">Due: ${dueDate.toLocaleString()}</p>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 40px 30px;">
+                        <div style="background: #fff5f0; border-left: 4px solid #ed8936; padding: 20px; border-radius: 8px;">
+                          <p style="margin: 0; color: #2d3748; font-size: 18px; line-height: 1.6;">
+                            ${task.text}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 0 30px 30px 30px; text-align: center;">
+                        <p style="margin: 0; color: #718096; font-size: 14px;">
+                          \u2705 Daily Sanctuary \u2022 Stay productive
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+          </html>
+        `;
+        
         await sendMail({
-          subject: "Task reminder",
-          text: `Reminder: ${task.text} (due at ${new Date(task.due_at).toLocaleString()})`,
+          subject: `\u23f0 Task Reminder: ${task.text.substring(0, 50)}${task.text.length > 50 ? '...' : ''}`,
+          text: `Reminder: ${task.text} (due at ${dueDate.toLocaleString()})`,
+          html: htmlContent,
         });
         await supabase
           .from("tasks")
@@ -1608,5 +1945,9 @@ const scheduleNotifications = () => {
 
 app.listen(PORT, () => {
   console.log(`API server running on http://localhost:${PORT}`);
+  // Initialize today's prayer logs immediately on startup
+  initializeDailyPrayerLogs().then(() => {
+    console.log("Prayer logs initialization check completed");
+  });
   scheduleNotifications();
 });
