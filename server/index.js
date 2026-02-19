@@ -2169,6 +2169,103 @@ app.get("/api/chat/active", async (req, res) => {
   }
 });
 
+// Save chat history to Drive (internal only, no API exposure)
+const saveChatToDrive = async (messages, title) => {
+  try {
+    const drive = await getDriveClient();
+    if (!drive) return null;
+
+    const folderId = await getDriveFolderId(drive);
+    if (!folderId) return null;
+
+    // Create chat JSON file
+    const chatData = {
+      title: title,
+      savedAt: new Date().toISOString(),
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp?.toISOString?.() || new Date().toISOString(),
+      })),
+    };
+
+    const fileName = `chat_${Date.now()}.json`;
+    const media = {
+      mimeType: 'application/json',
+      body: Readable.from([JSON.stringify(chatData, null, 2)]),
+    };
+
+    const result = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [folderId],
+        mimeType: 'application/json',
+      },
+      media: media,
+      fields: 'id, webViewLink',
+    });
+
+    return {
+      fileId: result.data.id,
+      fileLink: result.data.webViewLink,
+      fileName: fileName,
+    };
+  } catch (error) {
+    console.error("Failed to save chat to Drive:", error.message);
+    return null;
+  }
+};
+
+// Auto-save chat to Drive and track in Supabase (internal endpoint)
+app.post("/api/chat/save-history", async (req, res) => {
+  try {
+    if (!ensureSupabase(res)) return;
+    
+    const { messages, title } = req.body;
+    
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: "Messages required" });
+    }
+
+    let driveResult = null;
+    
+    // Try to save to Drive (non-critical)
+    try {
+      driveResult = await saveChatToDrive(messages, title || 'Untitled Chat');
+    } catch (driveError) {
+      console.log("Drive save skipped (not critical):", driveError.message);
+    }
+
+    // Store metadata in lesson_files table (same as existing files)
+    if (driveResult) {
+      const { error: dbError } = await supabase
+        .from("lesson_files")
+        .insert({
+          title: `Chat: ${title || 'Untitled'}`,
+          file_url: driveResult.fileLink,
+          file_name: driveResult.fileName,
+          drive_file_id: driveResult.fileId,
+          uploaded_at: new Date().toISOString(),
+          file_type: 'chat_history',
+        });
+
+      if (dbError) {
+        console.warn("Warning: Saved to Drive but DB log failed:", dbError.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      saved: driveResult ? 'drive' : 'local',
+      driveFileId: driveResult?.fileId,
+      driveFileLink: driveResult?.fileLink,
+    });
+  } catch (error) {
+    console.error("Chat save error:", error);
+    res.status(500).json({ error: "Failed to save chat", details: error.message });
+  }
+});
+
 app.get("/api/dashboard/stats", async (req, res) => {
   if (!ensureSupabase(res)) return;
   const today = getDateString(req.query.date);

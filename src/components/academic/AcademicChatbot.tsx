@@ -174,7 +174,7 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
     }
   };
 
-  // Save current chat to localStorage
+  // Save current chat (auto-saves to Drive internally)
   const saveCurrentChat = () => {
     if (messages.length <= 1) {
       toast.info('No conversation to save');
@@ -200,7 +200,7 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
         preview: firstUserMessage?.content.substring(0, 100) || 'No preview',
       };
 
-      // Save messages separately
+      // Save to localStorage
       localStorage.setItem(`academic_chat_${chatId}`, JSON.stringify({
         messages: messages.map(m => ({
           id: m.id,
@@ -223,6 +223,18 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
       
       localStorage.setItem('academic_chat_history', JSON.stringify(history));
       
+      // Save to Drive and track in Supabase (internal, silent)
+      api.post('/api/chat/save-history', {
+        title: title,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+          timestamp: m.timestamp?.toISOString?.() || new Date().toISOString(),
+        })),
+      }).catch(error => {
+        console.log('Drive save failed (non-critical):', error.message);
+      });
+
       setCurrentChatId(chatId);
       toast.success('Chat saved successfully!');
       loadChatHistory();
@@ -247,7 +259,7 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
           timestamp: new Date(m.timestamp),
         })));
         setCurrentChatId(chatId);
-        setLastSaved(null); // Reset for loaded chats (will autosave if modified)
+        setLastSaved(null);
         toast.success('Chat loaded successfully!');
         setShowSidebar(false);
       }
