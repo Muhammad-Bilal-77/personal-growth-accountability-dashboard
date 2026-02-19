@@ -2216,53 +2216,181 @@ const saveChatToDrive = async (messages, title) => {
   }
 };
 
-// Auto-save chat to Drive and track in Supabase (internal endpoint)
+// Maintain chat index file in Drive for cross-device access
+const updateChatIndex = async (newChat) => {
+  try {
+    const drive = await getDriveClient();
+    if (!drive) return;
+
+    const folderId = await getDriveFolderId(drive);
+    if (!folderId) return;
+
+    // Find existing chat_index.json file
+    const response = await drive.files.list({
+      q: `name='chat_index.json' and '${folderId}' in parents and trashed=false`,
+      fields: 'files(id)',
+      pageSize: 1,
+    });
+
+    let indexData = { chats: [newChat] };
+
+    // If index exists, get its contents and update
+    if (response.data.files && response.data.files.length > 0) {
+      const indexFileId = response.data.files[0].id;
+      const indexResponse = await drive.files.get({
+        fileId: indexFileId,
+        alt: 'media',
+      });
+
+      indexData = indexResponse.data;
+      // Add new chat to index, keeping only last 50 chats
+      indexData.chats = [newChat, ...indexData.chats].slice(0, 50);
+
+      // Update existing file
+      await drive.files.update({
+        fileId: indexFileId,
+        requestBody: { mimeType: 'application/json' },
+        media: {
+          mimeType: 'application/json',
+          body: Readable.from([JSON.stringify(indexData, null, 2)]),
+        },
+      });
+    } else {
+      // Create new index file
+      await drive.files.create({
+        requestBody: {
+          name: 'chat_index.json',
+          parents: [folderId],
+          mimeType: 'application/json',
+        },
+        media: {
+          mimeType: 'application/json',
+          body: Readable.from([JSON.stringify(indexData, null, 2)]),
+        },
+        fields: 'id',
+      });
+    }
+  } catch (error) {
+    console.error("Failed to update chat index:", error.message);
+  }
+};
+
+// Auto-save chat to Drive and maintain index (internal endpoint)
 app.post("/api/chat/save-history", async (req, res) => {
   try {
-    if (!ensureSupabase(res)) return;
-    
     const { messages, title } = req.body;
     
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "Messages required" });
     }
 
-    let driveResult = null;
+    // Save to Drive internally
+    const driveResult = await saveChatToDrive(messages, title || 'Untitled Chat');
     
-    // Try to save to Drive (non-critical)
-    try {
-      driveResult = await saveChatToDrive(messages, title || 'Untitled Chat');
-    } catch (driveError) {
-      console.log("Drive save skipped (not critical):", driveError.message);
+    if (!driveResult) {
+      return res.json({
+        success: true,
+        saved: 'local',
+        message: 'Chat saved locally (Drive temporarily unavailable)',
+      });
     }
 
-    // Store metadata in lesson_files table (same as existing files)
-    if (driveResult) {
-      const { error: dbError } = await supabase
-        .from("lesson_files")
-        .insert({
-          title: `Chat: ${title || 'Untitled'}`,
-          file_url: driveResult.fileLink,
-          file_name: driveResult.fileName,
-          drive_file_id: driveResult.fileId,
-          uploaded_at: new Date().toISOString(),
-          file_type: 'chat_history',
-        });
+    // Update chat index file for cross-device discovery
+    const chatEntry = {
+      id: driveResult.fileId,
+      title: title || 'Untitled Chat',
+      fileId: driveResult.fileId,
+      fileLink: driveResult.fileLink,
+      fileName: driveResult.fileName,
+      savedAt: new Date().toISOString(),
+    };
 
-      if (dbError) {
-        console.warn("Warning: Saved to Drive but DB log failed:", dbError.message);
-      }
-    }
+    await updateChatIndex(chatEntry);
 
     res.json({
       success: true,
-      saved: driveResult ? 'drive' : 'local',
-      driveFileId: driveResult?.fileId,
-      driveFileLink: driveResult?.fileLink,
+      saved: 'drive',
+      driveFileId: driveResult.fileId,
+      driveFileLink: driveResult.fileLink,
     });
   } catch (error) {
     console.error("Chat save error:", error);
     res.status(500).json({ error: "Failed to save chat", details: error.message });
+  }
+});
+
+// Get all saved chats from Drive (cross-device)
+app.get("/api/chat/history", async (req, res) => {
+  try {
+    const drive = await getDriveClient();
+    if (!drive) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const folderId = await getDriveFolderId(drive);
+    if (!folderId) {
+      return res.json({ success: true, data: [] });
+    }
+
+    // Find and read chat_index.json
+    const response = await drive.files.list({
+      q: `name='chat_index.json' and '${folderId}' in parents and trashed=false`,
+      fields: 'files(id)',
+      pageSize: 1,
+    });
+
+    if (!response.data.files || response.data.files.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const indexFileId = response.data.files[0].id;
+    const indexResponse = await drive.files.get({
+      fileId: indexFileId,
+      alt: 'media',
+    });
+
+    const indexData = indexResponse.data;
+    res.json({
+      success: true,
+      data: (indexData.chats || []).map(chat => ({
+        id: chat.fileId,
+        title: chat.title,
+        fileName: chat.fileName,
+        driveFileId: chat.fileId,
+        driveFileLink: chat.fileLink,
+        createdAt: chat.savedAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Chat history fetch error:", error);
+    // Return empty list on error - don't expose errors
+    res.json({ success: true, data: [] });
+  }
+});
+
+// Read chat file from Google Drive
+app.get("/api/chat/read/:fileId", async (req, res) => {
+  try {
+    const { fileId } = req.params;
+
+    const drive = await getDriveClient();
+    if (!drive) {
+      return res.status(503).json({ error: "Google Drive not configured" });
+    }
+
+    // Get file content from Drive
+    const fileResponse = await drive.files.get({
+      fileId: fileId,
+      alt: 'media',
+    });
+
+    res.json({
+      success: true,
+      data: fileResponse.data,
+    });
+  } catch (error) {
+    console.error("Chat file read error:", error);
+    res.status(500).json({ error: "Failed to read chat file", details: error.message });
   }
 });
 
@@ -2752,4 +2880,5 @@ app.listen(PORT, () => {
     console.log("Prayer logs initialization check completed");
   });
   scheduleNotifications();
+
 });

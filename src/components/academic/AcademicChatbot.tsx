@@ -162,8 +162,28 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
   };
 
   // Load chat history from localStorage
-  const loadChatHistory = () => {
+  const loadChatHistory = async () => {
     try {
+      // First, try to load from Supabase (cross-device)
+      try {
+        const response = await api.get<{ success: boolean; data: any[] }>('/api/chat/history');
+        if (response.data.success && response.data.data) {
+          const supabaseChats: ChatHistory[] = response.data.data.map((chat: any) => ({
+            id: chat.id, // Drive file ID
+            title: chat.title,
+            messageCount: 0,
+            createdAt: chat.createdAt,
+            updatedAt: chat.createdAt,
+            preview: chat.title.substring(0, 100),
+          }));
+          setChatHistory(supabaseChats.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+          return; // Success - loaded from Supabase
+        }
+      } catch (supabaseError) {
+        console.log('Supabase load failed, falling back to localStorage:', supabaseError);
+      }
+
+      // Fallback to localStorage if Supabase fails
       const stored = localStorage.getItem('academic_chat_history');
       if (stored) {
         const history = JSON.parse(stored) as ChatHistory[];
@@ -200,7 +220,7 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
         preview: firstUserMessage?.content.substring(0, 100) || 'No preview',
       };
 
-      // Save to localStorage
+      // Save to localStorage (local backup)
       localStorage.setItem(`academic_chat_${chatId}`, JSON.stringify({
         messages: messages.map(m => ({
           id: m.id,
@@ -210,20 +230,7 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
         })),
       }));
 
-      // Update history list
-      const stored = localStorage.getItem('academic_chat_history');
-      const history: ChatHistory[] = stored ? JSON.parse(stored) : [];
-      const existingIndex = history.findIndex(h => h.id === chatId);
-      
-      if (existingIndex >= 0) {
-        history[existingIndex] = chatData;
-      } else {
-        history.push(chatData);
-      }
-      
-      localStorage.setItem('academic_chat_history', JSON.stringify(history));
-      
-      // Save to Drive and track in Supabase (internal, silent)
+      // Save to Drive and Supabase (fire and forget)
       api.post('/api/chat/save-history', {
         title: title,
         messages: messages.map(m => ({
@@ -231,13 +238,28 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
           content: m.content,
           timestamp: m.timestamp?.toISOString?.() || new Date().toISOString(),
         })),
+      }).then(() => {
+        // Reload history from Supabase to get updated list
+        loadChatHistory();
       }).catch(error => {
         console.log('Drive save failed (non-critical):', error.message);
+        // Still update local history on failure
+        const stored = localStorage.getItem('academic_chat_history');
+        const history: ChatHistory[] = stored ? JSON.parse(stored) : [];
+        const existingIndex = history.findIndex(h => h.id === chatId);
+        
+        if (existingIndex >= 0) {
+          history[existingIndex] = chatData;
+        } else {
+          history.push(chatData);
+        }
+        
+        localStorage.setItem('academic_chat_history', JSON.stringify(history));
+        setChatHistory(history);
       });
 
       setCurrentChatId(chatId);
       toast.success('Chat saved successfully!');
-      loadChatHistory();
     } catch (error) {
       console.error('Failed to save chat:', error);
       toast.error('Failed to save chat');
@@ -246,9 +268,36 @@ export default function AcademicChatbot({ context, subjects, externalSelectedTex
     }
   };
 
-  // Load specific chat from localStorage
-  const loadChat = (chatId: string) => {
+  // Load specific chat from localStorage or Drive
+  const loadChat = async (chatId: string) => {
     try {
+      // Check if it's a Drive file ID (starts with '1' and contains '-' pattern typical of Google Drive IDs)
+      const isDriveId = chatId.includes('files') || (chatId.length > 20 && !chatId.startsWith('chat_'));
+      
+      if (isDriveId) {
+        // Try to load from Drive
+        try {
+          const response = await api.get<{ success: boolean; data: any }>(`/api/chat/read/${chatId}`);
+          if (response.data.success && response.data.data) {
+            const chatData = response.data.data;
+            setMessages(chatData.messages.map((m: any) => ({
+              id: m.id || `${Math.random()}`,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.timestamp),
+            })));
+            setCurrentChatId(chatId);
+            setLastSaved(null);
+            toast.success('Chat loaded from cloud!');
+            setShowSidebar(false);
+            return;
+          }
+        } catch (driveError) {
+          console.log('Drive load failed:', driveError);
+        }
+      }
+
+      // Fallback to localStorage
       const stored = localStorage.getItem(`academic_chat_${chatId}`);
       if (stored) {
         const data = JSON.parse(stored);
