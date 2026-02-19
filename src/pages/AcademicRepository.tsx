@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header';
 import SubjectTree from '@/components/academic/SubjectTree';
 import LessonList from '@/components/academic/LessonList';
 import LessonViewer from '@/components/academic/LessonViewer';
+import AcademicChatbot from '@/components/academic/AcademicChatbot';
 import { api, API_URL } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from '@/components/ui/sonner';
@@ -55,6 +56,7 @@ export default function AcademicRepository() {
   const [uploadRequest, setUploadRequest] = useState<XMLHttpRequest | null>(null);
   const [showSubjects, setShowSubjects] = useState(true);
   const [showLessons, setShowLessons] = useState(true);
+  const [externalSelectedText, setExternalSelectedText] = useState<string>('');
 
   const normalizeLesson = (data: any): LessonDetail => ({
     id: data.id,
@@ -354,6 +356,15 @@ export default function AcademicRepository() {
     setSelectedLesson(lessonId);
   };
 
+  const handleLessonTextSelected = (text: string) => {
+    setExternalSelectedText(text);
+  };
+
+  const handleExternalTextProcessed = () => {
+    // Clear the external text after it's been processed
+    setExternalSelectedText('');
+  };
+
   const filteredLessons = lessons;
 
   return (
@@ -519,10 +530,30 @@ export default function AcademicRepository() {
               isUploading={isUploading}
               uploadProgress={uploadProgress}
               onCancelUpload={handleCancelUpload}
+              onAskAI={handleLessonTextSelected}
             />
           </div>
         </div>
       </div>
+      
+      {/* AI Chatbot */}
+      <AcademicChatbot
+        subjects={subjects}
+        context={{
+          lessonTitle: currentLesson?.title,
+          lessonContent: currentLesson?.content,
+          subjectName: selectedSubjectId
+            ? subjects.find((s) => s.id === selectedSubjectId)?.name
+            : undefined,
+          chapterName: selectedChapterId
+            ? subjects
+                .find((s) => s.id === selectedSubjectId)
+                ?.chapters.find((c) => c.id === selectedChapterId)?.name
+            : undefined,
+        }}
+        externalSelectedText={externalSelectedText}
+        onExternalTextProcessed={handleExternalTextProcessed}
+      />
     </MainLayout>
   );
 }

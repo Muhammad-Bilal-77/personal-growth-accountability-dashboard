@@ -28,6 +28,7 @@ This project is a full-stack Vite + React frontend with a Node.js + Express back
 - Multiple file uploads per lesson stored in Google Drive.
 - File removal deletes from Drive and DB.
 - Viewer panels can be hidden to expand the reading area.
+- **AI Academic Assistant**: Interactive chatbot powered by Google Gemini (FREE) with access to your entire repository for answering questions, explaining concepts, summarizing chapters, and helping with lesson content.
 
 ### Events Calendar
 - Create and list events by date.
@@ -87,6 +88,9 @@ Create .env in the project root. Required fields:
 - EMAIL_HOST_USER
 - EMAIL_HOST_PASSWORD
 
+### Google Gemini (for AI Chatbot - FREE!)
+- GEMINI_API_KEY (Get from https://makersuite.google.com/app/apikey)
+
 ## Running Locally
 
 - Install dependencies: npm i
@@ -133,6 +137,7 @@ Migrations are stored in server/migrations. To run them:
 - DELETE /api/lessons/:id
 - POST /api/lessons/:id/upload
 - DELETE /api/lessons/:id/files/:fileId
+- POST /api/chat (AI chatbot)
 
 ### Analytics
 - GET /api/dashboard/stats

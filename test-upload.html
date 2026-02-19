@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File Upload Test - Enhanced Parser</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 50px auto; 
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+        button { 
+            padding: 12px 24px; 
+            margin: 10px 5px 10px 0; 
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button:hover { background: #45a049; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .success { color: #4CAF50; font-weight: bold; }
+        .error { color: #f44336; font-weight: bold; }
+        .warning { color: #ff9800; font-weight: bold; }
+        .info { color: #2196F3; }
+        #result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border: 1px solid #ddd; 
+            background: #fafafa;
+            border-radius: 4px;
+            white-space: pre-wrap; 
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .file-info {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+        .improvements {
+            background: #fff3e0;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+            border-left: 4px solid #ff9800;
+        }
+        .improvements h3 { margin-top: 0; color: #f57c00; }
+        .improvements ul { margin: 10px 0; padding-left: 20px; }
+        input[type="file"] {
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Enhanced File Upload Test</h1>
+        <div class="subtitle">Testing improved PDF, Word, and PowerPoint parsing</div>
+        
+        <div class="improvements">
+            <h3>✨ New Features</h3>
+            <ul>
+                <li><strong>50MB file limit</strong> (increased from 10MB)</li>
+                <li><strong>Better PPTX support</strong> - Extracts text from slides</li>
+                <li><strong>Enhanced PDF parsing</strong> - Better error handling</li>
+                <li><strong>Multi-parser fallback</strong> - Uses best available method</li>
+                <li><strong>Detailed logging</strong> - See extraction method used</li>
+            </ul>
+        </div>
+        
+        <p><strong>Supported formats:</strong> PDF, Word (.doc, .docx), PowerPoint (.ppt, .pptx), Text (.txt)</p>
+        
+        <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx,.ppt,.pptx">
+        <div class="file-info" id="fileInfo" style="display: none;"></div>
+        
+        <button onclick="uploadFile()" id="uploadBtn">Upload and Parse File</button>
+        <button onclick="clearResult()">Clear Result</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const resultDiv = document.getElementById('result');
+        const uploadBtn = document.getElementById('uploadBtn');
+        
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                fileInfo.style.display = 'block';
+                fileInfo.innerHTML = `
+                    <strong>Selected:</strong> ${file.name}<br>
+                    <strong>Size:</strong> ${sizeMB} MB<br>
+                    <strong>Type:</strong> ${file.type || 'Unknown'}
+                `;
+                
+                if (file.size > 50 * 1024 * 1024) {
+                    fileInfo.innerHTML += '<br><span class="error">⚠️ File exceeds 50MB limit!</span>';
+                    uploadBtn.disabled = true;
+                } else {
+                    uploadBtn.disabled = false;
+                }
+            }
+        });
+        
+        async function uploadFile() {
+            if (!fileInput.files || !fileInput.files[0]) {
+                resultDiv.innerHTML = '<span class="error">❌ Please select a file first</span>';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            resultDiv.innerHTML = '<span class="info">⏳ Uploading and processing ' + file.name + '...</span>';
+            uploadBtn.disabled = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const startTime = Date.now();
+                const response = await fetch('http://localhost:3001/api/parse-file', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error + (errorData.details ? ': ' + errorData.details : ''));
+                }
+                
+                const data = await response.json();
+                
+                const extractionMethod = data.extractedBy || 'specific parser';
+                const charCount = data.text.length;
+                const wordCount = data.text.split(/\\s+/).length;
+                
+                resultDiv.innerHTML = `
+<span class="success">✅ SUCCESS!</span>
+
+<strong>File:</strong> ${data.fileName}
+<strong>Processing time:</strong> ${duration}s
+<strong>Extraction method:</strong> ${extractionMethod}
+<strong>Characters extracted:</strong> ${charCount.toLocaleString()}
+<strong>Approximate words:</strong> ${wordCount.toLocaleString()}
+
+<strong>📄 Extracted Content:</strong>
+────────────────────────────────────────────────────────────────────
+${data.text}
+────────────────────────────────────────────────────────────────────
+                `.trim();
+                
+                uploadBtn.disabled = false;
+            } catch (error) {
+                resultDiv.innerHTML = `<span class="error">❌ ERROR: ${error.message}</span>`;
+                uploadBtn.disabled = false;
+            }
+        }
+        
+        function clearResult() {
+            resultDiv.innerHTML = '';
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            uploadBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>

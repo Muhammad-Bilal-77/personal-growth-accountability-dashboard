@@ -1,4 +1,4 @@
-import { Upload, Save, Trash2, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, CheckCircle2, Clock } from 'lucide-react';
+import { Upload, Save, Trash2, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, List, ListOrdered, CheckCircle2, Clock, Bot } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 interface LessonViewerProps {
@@ -17,6 +17,7 @@ interface LessonViewerProps {
   uploadProgress?: number;
   onCancelUpload?: () => void;
   lessonId?: string;
+  onAskAI?: (text: string) => void;
 }
 
 export default function LessonViewer({
@@ -35,18 +36,66 @@ export default function LessonViewer({
   uploadProgress,
   onCancelUpload,
   lessonId,
+  onAskAI,
 }: LessonViewerProps) {
   const [draftTitle, setDraftTitle] = useState(title ?? '');
   const [draftContent, setDraftContent] = useState(content ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [selectedText, setSelectedText] = useState<string>('');
+  const [showAskAbout, setShowAskAbout] = useState(false);
+  const [askAboutPosition, setAskAboutPosition] = useState({ x: 0, y: 0 });
   const editorRef = useRef<HTMLDivElement | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialMount = useRef(true);
 
   // Get localStorage key for this lesson
   const getLocalStorageKey = () => lessonId ? `lesson_draft_${lessonId}` : null;
+
+  // Handle text selection in lesson content
+  const handleTextSelection = (e: React.MouseEvent) => {
+    setTimeout(() => {
+      const selection = window.getSelection();
+      const text = selection?.toString().trim();
+      
+      if (text && text.length > 0 && onAskAI) {
+        setSelectedText(text);
+        
+        const range = selection?.getRangeAt(0);
+        const rect = range?.getBoundingClientRect();
+        
+        if (rect) {
+          setAskAboutPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.bottom
+          });
+          setShowAskAbout(true);
+        }
+      } else {
+        setShowAskAbout(false);
+      }
+    }, 10);
+  };
+
+  // Handle Ask AI button click
+  const handleAskAboutSelection = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (selectedText && onAskAI) {
+      onAskAI(selectedText);
+      setShowAskAbout(false);
+    }
+  };
+
+  // Hide "Ask AI about this" button when clicking elsewhere
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setShowAskAbout(false);
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
   // Save draft to localStorage
   const saveDraftToLocalStorage = (titleValue: string, contentValue: string) => {
@@ -477,7 +526,10 @@ export default function LessonViewer({
             )}
           </div>
         ) : (
-          <div className="prose prose-stone max-w-none">
+          <div 
+            className="prose prose-stone max-w-none"
+            onMouseUp={handleTextSelection}
+          >
             {content ? (
               <div dangerouslySetInnerHTML={{ __html: content }} />
             ) : (
@@ -512,6 +564,23 @@ export default function LessonViewer({
           </div>
         )}
       </div>
+      
+      {/* "Ask AI about this" popup button */}
+      {showAskAbout && onAskAI && (
+        <button
+          type="button"
+          onClick={handleAskAboutSelection}
+          className="fixed z-50 btn-primary text-sm py-1 px-3 shadow-lg animate-in fade-in zoom-in duration-200"
+          style={{
+            left: `${askAboutPosition.x}px`,
+            top: `${askAboutPosition.y + 10}px`,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <Bot className="w-3 h-3 mr-1.5" />
+          Ask AI about this
+        </button>
+      )}
     </div>
   );
 }

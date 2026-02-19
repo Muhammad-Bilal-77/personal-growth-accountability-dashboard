@@ -9,6 +9,9 @@ import cron from "node-cron";
 import nodemailer from "nodemailer";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
 
 dotenv.config();
 
@@ -605,11 +608,13 @@ app.get("/auth/google/callback", async (req, res) => {
 
 app.use("/api", (req, res, next) => {
   const publicPaths = [
-    "/api/health",
-    "/api/auth/login",
-    "/api/auth/me",
+    "/health",
+    "/auth/login",
+    "/auth/me",
+    "/parse-file",
   ];
-  if (publicPaths.includes(req.path)) return next();
+  // Allow all /chat/* paths
+  if (publicPaths.includes(req.path) || req.path.startsWith("/chat")) return next();
   return requireAuth(req, res, next);
 });
 
@@ -1462,6 +1467,706 @@ app.post("/api/lessons/:id/view", async (req, res) => {
 
   await recordActivity(getDateString(), 1);
   return res.json({ success: true });
+});
+
+// File upload for chatbot - parse document content
+const chatFileUpload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit (increased from 10MB)
+});
+
+app.post("/api/parse-file", (req, res, next) => {
+  console.log('File upload request received');
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Content-Length:', req.headers['content-length']);
+  chatFileUpload.single('file')(req, res, (err) => {
+    if (err) {
+      console.error('Multer error:', err);
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ 
+          error: "File too large", 
+          details: "Maximum file size is 50MB" 
+        });
+      }
+      return res.status(400).json({ 
+        error: "File upload failed", 
+        details: err.message 
+      });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const { buffer, mimetype, originalname } = req.file;
+    console.log(`Processing file: ${originalname}, Type: ${mimetype}, Size: ${buffer.length} bytes`);
+    let text = "";
+    let extractionMethod = "";
+
+    try {
+      // Parse PDF files
+      if (mimetype === 'application/pdf') {
+        console.log('Parsing PDF with pdf-parse');
+        const { PDFParse } = require('pdf-parse');
+        const parser = new PDFParse();
+        const data = await parser.parse(buffer);
+        text = data.text;
+        extractionMethod = 'pdf-parse';
+        console.log(`PDF parsed: ${text.length} characters, ${data.numpages} pages`);
+      }
+      // Parse Word documents (DOCX)
+      else if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+               mimetype === 'application/msword') {
+        console.log('Parsing Word document with mammoth');
+        const mammoth = await import('mammoth');
+        const result = await mammoth.extractRawText({ buffer });
+        text = result.value;
+        extractionMethod = 'mammoth';
+        console.log(`Word document parsed: ${text.length} characters`);
+      }
+      // Parse PowerPoint (PPTX) - extract text from XML structure
+      else if (mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+               mimetype === 'application/vnd.ms-powerpoint') {
+        console.log('Parsing PowerPoint - extracting text from slide XML');
+        try {
+          const AdmZip = (await import('adm-zip')).default;
+          const zip = new AdmZip(buffer);
+          const zipEntries = zip.getEntries();
+          
+          let slideTexts = [];
+          zipEntries.forEach(entry => {
+            if (entry.entryName.match(/ppt\/slides\/slide\d+\.xml/)) {
+              const content = entry.getData().toString('utf8');
+              // Extract text between <a:t> tags
+              const textMatches = content.match(/<a:t>([^<]+)<\/a:t>/g);
+              if (textMatches) {
+                const slideText = textMatches.map(match => 
+                  match.replace(/<\/?a:t>/g, '')
+                ).join(' ');
+                slideTexts.push(slideText);
+              }
+            }
+          });
+          
+          
+          if (slideTexts.length > 0) {
+            text = slideTexts.join('\n\n--- Next Slide ---\n\n');
+            extractionMethod = 'adm-zip-xml';
+            console.log(`PPTX parsed: ${text.length} characters from ${slideTexts.length} slides`);
+          } else {
+            text = "PowerPoint file uploaded but no text content could be extracted. The slides may contain only images or complex formatting.";
+            extractionMethod = 'pptx-fallback';
+          }
+        } catch (pptxError) {
+          console.error('PPTX parsing error:', pptxError);
+          text = "PowerPoint file uploaded. Content extraction encountered an error. Please try converting to PDF format for better results.";
+          extractionMethod = 'pptx-error';
+        }
+      }
+      // Parse plain text files
+      else if (mimetype === 'text/plain') {
+        text = buffer.toString('utf-8');
+        extractionMethod = 'utf-8';
+        console.log(`Text file parsed: ${text.length} characters`);
+      }
+      // Unsupported format
+      else {
+        console.log('Unsupported mimetype:', mimetype);
+        return res.status(400).json({ 
+          error: "Unsupported file format. Please use PDF, DOCX, PPTX, or TXT files.",
+          receivedType: mimetype
+        });
+      }
+
+      if (!text || text.trim().length === 0) {
+        console.log('No text extracted from file');
+        return res.status(400).json({ 
+          error: "Could not extract text from the file. The file might be empty, corrupted, or contain only images." 
+        });
+      }
+
+      console.log(`Successfully extracted ${text.trim().length} characters via ${extractionMethod}`);
+      return res.json({ 
+        success: true, 
+        text: text.trim(),
+        fileName: originalname,
+        extractedBy: extractionMethod
+      });
+
+    } catch (parseError) {
+      console.error("File parsing error:", parseError);
+      return res.status(500).json({ 
+        error: "Failed to parse file content. Please ensure the file is not corrupted.",
+        details: parseError.message
+      });
+    }
+
+  } catch (error) {
+    console.error("File upload error:", error);
+    return res.status(500).json({ 
+      error: "Failed to process file upload",
+      details: error.message
+    });
+  }
+});
+
+// Simple in-memory cache for AI responses
+const chatCache = new Map();
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+
+// AI Chat endpoint
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { 
+      message, 
+      context, 
+      conversationHistory,
+      uploadedFileText,
+      uploadedFileName,
+      contentScope = 'all',
+      selectedSubjectId,
+      selectedChapterId
+    } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Create cache key based on message, context, and file content
+    const cacheKey = JSON.stringify({ 
+      message, 
+      context, 
+      uploadedFileText, 
+      contentScope,
+      selectedSubjectId,
+      selectedChapterId
+    });
+    const cached = chatCache.get(cacheKey);
+    
+    // Return cached response if available and not expired
+    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+      return res.json({ 
+        message: cached.response,
+        success: true,
+        cached: true,
+        model: cached.model || 'unknown',
+        apiKey: cached.apiKey || 'unknown'
+      });
+    }
+
+    // Check if Gemini API key is configured
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    const GEMINI_API_KEY_FALLBACK = process.env.GEMINI_API_KEY_FALLBACK;
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
+    const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+    
+    if (!GEMINI_API_KEY && !GEMINI_API_KEY_FALLBACK && !GROQ_API_KEY) {
+      return res.status(503).json({ 
+        error: "AI service not configured. Please add GEMINI_API_KEY to your environment variables." 
+      });
+    }
+
+    // Handle uploaded file content
+    let uploadedFileContext = "";
+    if (uploadedFileText && contentScope === 'file') {
+      uploadedFileContext = `\n\n=== UPLOADED FILE CONTENT ===\n`;
+      uploadedFileContext += `File: ${uploadedFileName || 'Unknown'}\n\n`;
+      uploadedFileContext += uploadedFileText;
+      uploadedFileContext += `\n\n=== END OF FILE ===\n`;
+    }
+
+    // Fetch academic repository data based on content scope
+    let repositoryContext = "";
+    if (supabase && contentScope !== 'file') {
+      try {
+        // Build query based on content scope
+        let query = supabase
+          .from("subjects")
+          .select(`
+            id,
+            name,
+            chapters:chapters(
+              id,
+              name,
+              lessons:lessons(
+                id,
+                title,
+                content
+              )
+            )
+          `)
+          .order('name');
+
+        // Filter by specific subject if contentScope is 'subject' or 'chapter'
+        if ((contentScope === 'subject' || contentScope === 'chapter') && selectedSubjectId) {
+          query = query.eq('id', selectedSubjectId);
+        }
+
+        const { data: subjects, error: subjectsError } = await query;
+
+        if (!subjectsError && subjects && subjects.length > 0) {
+          // If contentScope is 'current', only use context from props
+          if (contentScope === 'current') {
+            repositoryContext = "\n\n=== CURRENT LESSON CONTEXT ===\n\n";
+            if (context?.lessonTitle) {
+              repositoryContext += `Lesson: ${context.lessonTitle}\n`;
+            }
+            if (context?.subjectName) {
+              repositoryContext += `Subject: ${context.subjectName}\n`;
+            }
+            if (context?.chapterName) {
+              repositoryContext += `Chapter: ${context.chapterName}\n`;
+            }
+            if (context?.lessonContent) {
+              repositoryContext += `\nContent:\n${context.lessonContent}\n`;
+            }
+          } else {
+            repositoryContext = "\n\n=== ACADEMIC REPOSITORY CONTENT ===\n\n";
+          
+            subjects.forEach((subject, sIndex) => {
+              repositoryContext += `\nSUBJECT ${sIndex + 1}: ${subject.name}\n`;
+              repositoryContext += "=" .repeat(50) + "\n";
+              
+              if (subject.chapters && subject.chapters.length > 0) {
+                // Filter chapters if contentScope is 'chapter'
+                const chaptersToShow = contentScope === 'chapter' && selectedChapterId
+                  ? subject.chapters.filter(ch => ch.id === selectedChapterId)
+                  : subject.chapters;
+                
+                chaptersToShow.forEach((chapter, cIndex) => {
+                  repositoryContext += `\n  CHAPTER ${cIndex + 1}: ${chapter.name}\n`;
+                  repositoryContext += "  " + "-".repeat(45) + "\n";
+                  
+                  if (chapter.lessons && chapter.lessons.length > 0) {
+                    chapter.lessons.forEach((lesson, lIndex) => {
+                      repositoryContext += `\n    LESSON ${lIndex + 1}: ${lesson.title}\n`;
+                      if (lesson.content) {
+                        // Include FULL lesson content (word-to-word)
+                        repositoryContext += `    Content:\n${lesson.content}\n`;
+                        repositoryContext += `    [End of ${lesson.title}]\n`;
+                      } else {
+                        repositoryContext += `    (No content available)\n`;
+                      }
+                    });
+                  } else {
+                    repositoryContext += "    (No lessons in this chapter)\n";
+                  }
+                });
+              } else {
+                repositoryContext += "  (No chapters in this subject)\n";
+              }
+              repositoryContext += "\n";
+            });
+          }
+        }
+      } catch (dbError) {
+        console.warn("Could not fetch repository data:", dbError.message);
+      }
+    }
+
+    // Import Google Generative AI dynamically
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    
+    // Primary API key
+    const primaryKey = GEMINI_API_KEY || GEMINI_API_KEY_FALLBACK;
+    const genAI = new GoogleGenerativeAI(primaryKey);
+    
+    let systemMessage = `You are a helpful academic assistant. You can help students:
+- Understand lessons and concepts
+- Summarize chapters or subjects
+- Answer questions about specific topics
+- Compare different lessons or chapters
+- Provide study guidance
+- Analyze uploaded documents (PDF, Word, PowerPoint)
+
+Be concise, accurate, and educational in your responses.`;
+
+    // Add uploaded file context if using file-only mode
+    if (uploadedFileContext) {
+      systemMessage += uploadedFileContext;
+      systemMessage += "\n\nThe student has uploaded a file and wants to ask questions about it. Focus your answers on the uploaded file content.";
+    }
+    
+    // Add repository context
+    if (repositoryContext) {
+      systemMessage += repositoryContext;
+      
+      // Add scope information
+      if (contentScope === 'current') {
+        systemMessage += "\n\nNote: You are currently focusing on the lesson the student is viewing.";
+      } else if (contentScope === 'subject') {
+        systemMessage += "\n\nNote: You are currently focusing on a specific subject.";
+      } else if (contentScope === 'chapter') {
+        systemMessage += "\n\nNote: You are currently focusing on a specific chapter.";
+      }
+    }
+    
+    // Add current viewing context if available (and not in file-only mode)
+    if (context && contentScope !== 'file') {
+      systemMessage += "\n\n=== CURRENTLY VIEWING ===\n";
+      if (context.subjectName) {
+        systemMessage += `Subject: ${context.subjectName}\n`;
+      }
+      if (context.chapterName) {
+        systemMessage += `Chapter: ${context.chapterName}\n`;
+      }
+      if (context.lessonTitle) {
+        systemMessage += `Lesson: ${context.lessonTitle}\n`;
+      }
+      if (context.lessonContent) {
+        // Send FULL content without any truncation
+        systemMessage += `\nCurrent Lesson Full Content:\n${context.lessonContent}\n`;
+      }
+    }
+
+    // Build conversation history for context
+    let conversationContext = systemMessage + "\n\n";
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext += "=== CONVERSATION HISTORY ===\n";
+      conversationHistory.forEach(msg => {
+        conversationContext += `${msg.role === 'user' ? 'Student' : 'Assistant'}: ${msg.content}\n`;
+      });
+    }
+    conversationContext += `\n=== NEW QUESTION ===\nStudent: ${message}\n\nAssistant:`;
+
+    // Helper function to try generating content with a specific model and API key
+    const tryGenerateContent = async (genAIInstance, modelName, conversationContext, retries = 3) => {
+      const modelInstance = genAIInstance.getGenerativeModel({ model: modelName });
+      let lastError;
+      
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          const result = await modelInstance.generateContent({
+            contents: [{ parts: [{ text: conversationContext }] }],
+          });
+          const response = await result.response;
+          const responseMessage = response.text() || "I apologize, but I couldn't generate a response.";
+          
+          return { success: true, message: responseMessage, model: modelName };
+        } catch (apiError) {
+          lastError = apiError;
+          
+          // If this is a rate limit or service unavailable error, retry with backoff
+          if (apiError.status === 503 || apiError.status === 429 || apiError.status === 500) {
+            if (attempt < retries) {
+              const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
+              console.log(`${modelName} API error (${apiError.status}), retrying in ${waitTime}ms... (attempt ${attempt}/${retries})`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+          }
+          
+          // For other errors or final retry, throw the error
+          throw apiError;
+        }
+      }
+      
+      throw lastError;
+    };
+
+    // Helper function to try all models with a given API key
+    const tryAllModelsWithKey = async (genAIInstance, keyLabel) => {
+      console.log(`\n=== Trying with ${keyLabel} ===`);
+      
+      // Try primary model: Gemini 2.5 Flash
+      try {
+        console.log('Attempting with Gemini 2.5 Flash...');
+        return await tryGenerateContent(genAIInstance, 'gemini-2.5-flash', conversationContext, 2);
+      } catch (primaryError) {
+        console.log('Gemini 2.5 Flash failed, trying alternatives...');
+        
+        // Fallback to Gemini Flash
+        try {
+          console.log('Attempting with Gemini Flash (generic)...');
+          return await tryGenerateContent(genAIInstance, 'gemini-flash', conversationContext, 1);
+        } catch (flashError) {
+          
+          // Try Gemini Pro
+          try {
+            console.log('Attempting with Gemini Pro...');
+            return await tryGenerateContent(genAIInstance, 'gemini-pro', conversationContext, 1);
+          } catch (proError) {
+            console.log(`All models failed with ${keyLabel}:`, {
+              'gemini-2.5-flash': primaryError.message.substring(0, 150) + '...',
+              'gemini-flash': flashError.message.substring(0, 150) + '...',
+              'gemini-pro': proError.message.substring(0, 150) + '...'
+            });
+            throw primaryError; // Throw the original error
+          }
+        }
+      }
+    };
+
+    // Helper function to try Groq as a fallback
+    const tryGroqFallback = async () => {
+      if (!GROQ_API_KEY) {
+        throw new Error('Groq API key not configured');
+      }
+
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          messages: [
+            { role: 'user', content: conversationContext }
+          ],
+          temperature: 0.6,
+          max_tokens: 1024
+        })
+      });
+
+      if (!groqResponse.ok) {
+        const errorText = await groqResponse.text();
+        throw new Error(`Groq API error (${groqResponse.status}): ${errorText}`);
+      }
+
+      const groqData = await groqResponse.json();
+      const groqMessage = groqData?.choices?.[0]?.message?.content?.trim();
+
+      if (!groqMessage) {
+        throw new Error('Groq returned an empty response');
+      }
+
+      return { success: true, message: groqMessage, model: GROQ_MODEL };
+    };
+
+    // Try primary API key first
+    let result;
+    let usedModel = 'gemini-2.5-flash';
+    let usedApiKey = 'primary';
+    
+    try {
+      result = await tryAllModelsWithKey(genAI, 'Primary API Key');
+      usedModel = result.model;
+    } catch (primaryKeyError) {
+      console.log('\n⚠️  Primary API key exhausted. Trying fallback API key...\n');
+      
+      // Try fallback API key if available
+      if (GEMINI_API_KEY_FALLBACK && GEMINI_API_KEY_FALLBACK !== primaryKey) {
+        try {
+          const fallbackGenAI = new GoogleGenerativeAI(GEMINI_API_KEY_FALLBACK);
+          result = await tryAllModelsWithKey(fallbackGenAI, 'Fallback API Key');
+          usedModel = result.model;
+          usedApiKey = 'fallback';
+          console.log(`✅ Success with fallback API key using ${result.model}`);
+        } catch (fallbackKeyError) {
+          console.log('❌ Both Gemini API keys exhausted. Errors:');
+          console.log('Primary:', primaryKeyError.message.substring(0, 200));
+          console.log('Fallback:', fallbackKeyError.message.substring(0, 200));
+
+          if (GROQ_API_KEY) {
+            try {
+              console.log('\n⚠️  Trying Groq fallback...');
+              result = await tryGroqFallback();
+              usedModel = result.model;
+              usedApiKey = 'groq';
+              console.log(`✅ Success with Groq using ${result.model}`);
+            } catch (groqError) {
+              console.log('❌ Groq fallback failed:', groqError.message.substring(0, 200));
+              
+              console.log('\n⚠️  IMPORTANT: All API keys have exceeded their quota.');
+              console.log('Solutions:');
+              console.log('1. Wait until midnight for quota reset');
+              console.log('2. Use additional API keys');
+              console.log('3. Upgrade to a paid plan for higher limits\n');
+              
+              // Throw the original error
+              throw primaryKeyError;
+            }
+          } else {
+            console.log('\n⚠️  IMPORTANT: All API keys have exceeded their quota.');
+            console.log('Solutions:');
+            console.log('1. Wait until midnight for quota reset');
+            console.log('2. Use additional API keys');
+            console.log('3. Upgrade to a paid plan for higher limits\n');
+            
+            // Throw the original error
+            throw primaryKeyError;
+          }
+        }
+      } else {
+        console.log('❌ No fallback API key available or same as primary');
+        
+        if (GROQ_API_KEY) {
+          try {
+            console.log('\n⚠️  Trying Groq fallback...');
+            result = await tryGroqFallback();
+            usedModel = result.model;
+            usedApiKey = 'groq';
+            console.log(`✅ Success with Groq using ${result.model}`);
+          } catch (groqError) {
+            console.log('❌ Groq fallback failed:', groqError.message.substring(0, 200));
+            throw primaryKeyError;
+          }
+        } else {
+          throw primaryKeyError;
+        }
+      }
+    }
+
+    // If we got a successful response
+    if (result && result.success) {
+      // Cache the response for future identical queries
+      chatCache.set(cacheKey, {
+        response: result.message,
+        timestamp: Date.now(),
+        model: usedModel,
+        apiKey: usedApiKey
+      });
+
+      // Clean up old cache entries (keep cache size manageable)
+      if (chatCache.size > 100) {
+        const oldestKey = chatCache.keys().next().value;
+        chatCache.delete(oldestKey);
+      }
+
+      return res.json({ 
+        message: result.message,
+        success: true,
+        cached: false,
+        model: usedModel,
+        apiKey: usedApiKey
+      });
+    }
+    
+    // This shouldn't happen, but just in case
+    throw new Error('Unexpected error: No response generated');
+
+  } catch (error) {
+    console.error("Chat API error:", error);
+    
+    // Provide user-friendly error messages
+    let errorMessage = "Failed to process chat request";
+    if (error.status === 503) {
+      errorMessage = "AI service is currently experiencing high demand. Please try again in a moment.";
+    } else if (error.status === 429) {
+      errorMessage = "Rate limit reached. Please wait a moment before trying again.";
+    } else if (error.message) {
+      errorMessage = `Error: ${error.message}`;
+    }
+    
+    return res.status(500).json({ 
+      error: errorMessage,
+      details: error.status ? `Status ${error.status}` : error.message 
+    });
+  }
+});
+
+// Active Chat Auto-Save to Google Drive
+// Auto-save active chat (single file that gets updated)
+app.post("/api/chat/auto-save", async (req, res) => {
+  try {
+    const { messages } = req.body;
+
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: "Messages array is required" });
+    }
+
+    const drive = await getDriveClient();
+    if (!drive) {
+      return res.status(503).json({ error: "Google Drive not configured" });
+    }
+
+    const folderId = await getDriveFolderId(drive);
+    if (!folderId) {
+      return res.status(503).json({ error: "Could not access Drive folder" });
+    }
+
+    // Create chat data
+    const chatData = {
+      messages: messages,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const fileName = 'active_chat.json';
+    const media = {
+      mimeType: 'application/json',
+      body: Readable.from([JSON.stringify(chatData, null, 2)]),
+    };
+
+    // Check if file exists
+    const existingFiles = await drive.files.list({
+      q: `name='${fileName}' and '${folderId}' in parents and trashed=false`,
+      fields: 'files(id)',
+    });
+
+    let result;
+    if (existingFiles.data.files && existingFiles.data.files.length > 0) {
+      // Update existing file
+      result = await drive.files.update({
+        fileId: existingFiles.data.files[0].id,
+        media: media,
+        fields: 'id',
+      });
+    } else {
+      // Create new file
+      const fileMetadata = {
+        name: fileName,
+        mimeType: 'application/json',
+        parents: [folderId],
+      };
+      result = await drive.files.create({
+        requestBody: fileMetadata,
+        media: media,
+        fields: 'id',
+      });
+    }
+
+    res.json({
+      success: true,
+      fileId: result.data.id,
+      messageCount: messages.length,
+    });
+  } catch (error) {
+    console.error("Chat auto-save error:", error);
+    res.status(500).json({ error: "Failed to auto-save chat", details: error.message });
+  }
+});
+
+// Load active chat from Google Drive
+app.get("/api/chat/active", async (req, res) => {
+  try {
+    const drive = await getDriveClient();
+    if (!drive) {
+      return res.status(503).json({ error: "Google Drive not configured" });
+    }
+
+    const folderId = await getDriveFolderId(drive);
+    if (!folderId) {
+      return res.status(503).json({ error: "Could not access Drive folder" });
+    }
+
+    const fileName = 'active_chat.json';
+
+    // Find the file
+    const response = await drive.files.list({
+      q: `name='${fileName}' and '${folderId}' in parents and trashed=false`,
+      fields: 'files(id)',
+    });
+
+    if (!response.data.files || response.data.files.length === 0) {
+      // No saved chat yet, return empty
+      return res.json({ messages: [] });
+    }
+
+    // Get file content
+    const fileResponse = await drive.files.get({
+      fileId: response.data.files[0].id,
+      alt: 'media',
+    });
+
+    res.json(fileResponse.data);
+  } catch (error) {
+    console.error("Chat load error:", error);
+    res.status(500).json({ error: "Failed to load chat", details: error.message });
+  }
 });
 
 app.get("/api/dashboard/stats", async (req, res) => {
